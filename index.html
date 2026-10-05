@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#101b24">
+  <meta name="description" content="Roll the dice. Defy the darkness. A turn-based dungeon adventure by Max.">
+  <title>Dice Attack — Roll against the darkness</title>
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="style.css">
+  <script src="game.js" defer></script>
+</head>
+<body>
+  <noscript><p style="padding: 24px; text-align: center;">Dice Attack needs JavaScript to roll the dice. Enable JavaScript in your browser to play.</p></noscript>
+  <div class="app">
+    <header class="topbar">
+      <a class="brand" href="./" aria-label="Dice Attack home">
+        <img src="favicon.svg" width="42" height="42" alt="">
+        <span>DICE<span class="brand-accent">ATTACK</span><small>A GAME BY MAX</small></span>
+      </a>
+      <div class="top-actions">
+        <span class="record" id="record">BEST EXPEDITION <b>—</b></span>
+        <button class="icon-button" id="sound-button" aria-label="Turn sound on" aria-pressed="false" title="Sound">♪</button>
+        <button class="icon-button" id="help-button" aria-label="How to play" title="How to play">?</button>
+      </div>
+    </header>
+
+    <main>
+      <section class="expedition-header" aria-label="Expedition progress">
+        <div>
+          <p class="eyebrow"><span class="tiny-diamond"></span> YOUR EXPEDITION</p>
+          <h1 id="zone-title">The Whispering Wilds</h1>
+        </div>
+        <div class="route" id="route" aria-label="Nine encounters"></div>
+        <div class="encounter-count"><span id="encounter-number">01</span><span>/ 09<br>ENCOUNTERS</span></div>
+      </section>
+
+      <section class="arena forest" id="arena" aria-label="Battle arena">
+        <div class="scene-art" id="scene-art" aria-hidden="true"></div>
+        <div class="scene-vignette"></div>
+        <div class="arena-top">
+          <span class="area-label" id="area-label">CHAPTER I · THE WILDS</span>
+          <span class="battle-badge" id="battle-badge"><span></span> YOUR TURN</span>
+        </div>
+        <div class="combatants">
+          <div class="fighter hero-fighter">
+            <div class="fighter-heading"><span class="portrait-icon">✦</span><div><span class="fighter-role">THE DICEBOUND</span><h2>You</h2></div><span class="hp-number" id="hero-hp">40 <small>/ 40</small></span></div>
+            <div class="health-track"><div id="hero-health-fill" class="health-fill hero-health"></div></div>
+            <div class="character-stage" id="hero-stage">
+              <div class="ground-shadow"></div>
+              <div class="character-art" id="hero-art"></div>
+              <div class="ward-aura" id="ward-aura"></div>
+              <div class="floating-effects" id="hero-effects"></div>
+            </div>
+            <div class="hero-caption" id="hero-caption"><span class="mini-icon">⚔</span><span id="hero-power">+0 attack power</span><span class="caption-divider"></span><span id="hero-healing">+0 healing</span></div>
+          </div>
+          <div class="versus" aria-hidden="true"><span></span>VS<span></span></div>
+          <div class="fighter enemy-fighter">
+            <div class="fighter-heading"><span class="portrait-icon enemy-icon" id="enemy-icon">I</span><div><span class="fighter-role" id="enemy-role">WILD CREATURE</span><h2 id="enemy-name">Moss Slime</h2></div><span class="hp-number" id="enemy-hp"></span></div>
+            <div class="health-track"><div id="enemy-health-fill" class="health-fill enemy-health"></div></div>
+            <div class="character-stage" id="enemy-stage">
+              <div class="ground-shadow"></div>
+              <div class="character-art" id="enemy-art"></div>
+              <div class="floating-effects" id="enemy-effects"></div>
+            </div>
+            <div class="intent" id="intent"><span class="intent-icon">⚔</span><span id="intent-text"></span></div>
+          </div>
+        </div>
+        <div class="arena-bottom"><span id="flavor-text">Something stirs beneath the ancient trees.</span><span class="turn-counter" id="turn-counter">TURN 01</span></div>
+      </section>
+
+      <section class="battle-console" aria-label="Dice and combat actions">
+        <div class="console-heading">
+          <div><p class="eyebrow">FORTUNE IS IN YOUR HANDS</p><h2 id="phase-title">Make your own luck.</h2></div>
+          <p class="phase-instruction" id="phase-instruction">Roll 3 dice, then assign them to attack, guard, or mend.</p>
+        </div>
+        <div class="controls-layout">
+          <div class="dice-panel">
+            <div class="dice-tray" id="dice-tray" aria-label="Your three dice"></div>
+            <div class="dice-tools"><span id="dice-caption">THREE DICE. ONE DESTINY.</span><button class="reroll-button" id="reroll-button" disabled>↻ Reroll selected <span>1 left</span></button></div>
+          </div>
+          <div class="assignment-panel">
+            <div class="action-slots">
+              <button class="action-slot attack" id="assign-attack" disabled><span class="action-symbol">⚔</span><span class="action-copy"><strong>Attack</strong><small>Hurt the monster</small></span><span class="action-value" id="attack-value">0</span><span class="slot-dice" id="attack-dice">NO DICE</span></button>
+              <button class="action-slot guard" id="assign-guard" disabled><span class="action-symbol">⬡</span><span class="action-copy"><strong>Guard</strong><small>Block this turn</small></span><span class="action-value" id="guard-value">0</span><span class="slot-dice" id="guard-dice">NO DICE</span></button>
+              <button class="action-slot mend" id="assign-mend" disabled><span class="action-symbol">✚</span><span class="action-copy"><strong>Mend</strong><small>Restore health</small></span><span class="action-value" id="mend-value">0</span><span class="slot-dice" id="mend-dice">NO DICE</span></button>
+            </div>
+            <div class="commit-row"><span id="combat-preview">A roll of 6 on Attack adds +3 critical damage.</span><button class="primary-button" id="main-button"><span id="main-button-text">Roll the dice</span><span class="button-arrow">↗</span></button></div>
+          </div>
+        </div>
+      </section>
+      <section class="journal" aria-label="Battle log"><span class="journal-label">BATTLE JOURNAL</span><div id="battle-log" role="log" aria-live="polite" aria-relevant="additions"></div></section>
+      <footer><span>ROLL THE DICE. DEFY THE DARKNESS.</span><span>DICE ATTACK <span class="footer-dot">·</span> MADE BY MAX</span></footer>
+    </main>
+  </div>
+  <div class="overlay" id="reward-overlay" hidden>
+    <section class="modal reward-modal" role="dialog" aria-modal="true" aria-labelledby="reward-title" tabindex="-1">
+      <div class="modal-emblem">✦</div>
+      <p class="eyebrow">THE DARKNESS RETREATS</p>
+      <h2 id="reward-title">A well-earned victory.</h2>
+      <p class="modal-description" id="reward-description"></p>
+      <div class="reward-cards" id="reward-cards"></div>
+      <p class="modal-footnote">Choose one blessing to carry into the next encounter.</p>
+    </section>
+  </div>
+  <div class="overlay" id="end-overlay" hidden>
+    <section class="modal end-modal" role="dialog" aria-modal="true" aria-labelledby="end-title" tabindex="-1">
+      <div class="modal-emblem" id="end-emblem">✦</div>
+      <p class="eyebrow" id="end-eyebrow">THE END OF AN EXPEDITION</p>
+      <h2 id="end-title">Not all luck lasts.</h2>
+      <p class="modal-description" id="end-description"></p>
+      <div class="run-stats" id="run-stats"></div>
+      <button class="primary-button" id="restart-button">Begin a new expedition <span class="button-arrow">↗</span></button>
+      <p class="modal-footnote">New dice. New chances. Your next adventure awaits.</p>
+    </section>
+  </div>
+  <div class="overlay" id="help-overlay" hidden>
+    <section class="modal help-modal" role="dialog" aria-modal="true" aria-labelledby="help-title" tabindex="-1">
+      <button class="close-button icon-button" id="close-help" aria-label="Close instructions">×</button>
+      <p class="eyebrow">A LITTLE KNOWLEDGE. A LITTLE LUCK.</p>
+      <h2 id="help-title">How to defy the darkness.</h2>
+      <div class="help-steps">
+        <p><b>01 <strong>Roll your dice.</strong></b> You get three six-sided dice each turn. Select a die and reroll it once per turn if you want to risk a better result.</p>
+        <p><b>02 <strong>Choose their fate.</strong></b> Click a die, then Attack, Guard, or Mend. Assign multiple dice to the same action. Click an assigned die to move it.</p>
+        <p><b>03 <strong>Make your move.</strong></b> Attack deals the rolled value as damage; every attack die showing 6 adds +3. Guard blocks its value for this turn. Mend heals its value, up to your maximum health. Blessings improve these values.</p>
+        <p><b>04 <strong>Read your enemy.</strong></b> The monster shows its next move. Your healing and attack resolve first, then a surviving monster acts. Enemy shields block damage before health. Unused guard disappears at the end of the turn. Monsters gain +1 damage every three turns, so don't wait forever!</p>
+        <p><b>05 <strong>Go deeper.</strong></b> Beat nine monsters across three chapters. After each victory, recover 8 health and choose a permanent blessing. Defeat the last demon to win.</p>
+      </div>
+      <p class="modal-footnote">Keyboard: 1–3 select dice · A attack · G guard · M mend · R reroll · Space roll / fight</p>
+      <button class="primary-button" id="help-play-button">Let fate decide <span class="button-arrow">↗</span></button>
+    </section>
+  </div>
+  <div class="toast" id="toast" role="status" hidden></div>
+</body>
+</html>
