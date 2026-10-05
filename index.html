@@ -7,8 +7,8 @@
   <meta name="description" content="Roll the dice. Defy the darkness. A turn-based dungeon adventure by Max.">
   <title>Dice Attack — Roll against the darkness</title>
   <link rel="icon" href="favicon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="style.css">
-  <script src="game.js" defer></script>
+  <link rel="stylesheet" href="style.css?v=2">
+  <script src="game.js?v=2" defer></script>
 </head>
 <body>
   <noscript><p style="padding: 24px; text-align: center;">Dice Attack needs JavaScript to roll the dice. Enable JavaScript in your browser to play.</p></noscript>
@@ -20,6 +20,8 @@
       </a>
       <div class="top-actions">
         <span class="record" id="record">BEST EXPEDITION <b>—</b></span>
+        <span class="gold-counter" id="gold-counter" aria-label="Gold">◈ <b>0</b></span>
+        <button class="reset-button" id="reset-button" aria-label="Reset run" title="Reset run">↻ <span>Reset run</span></button>
         <button class="icon-button" id="sound-button" aria-label="Turn sound on" aria-pressed="false" title="Sound">♪</button>
         <button class="icon-button" id="help-button" aria-label="How to play" title="How to play">?</button>
       </div>
@@ -30,9 +32,10 @@
         <div>
           <p class="eyebrow"><span class="tiny-diamond"></span> YOUR EXPEDITION</p>
           <h1 id="zone-title">The Whispering Wilds</h1>
+          <p class="run-note" id="run-note"></p>
         </div>
-        <div class="route" id="route" aria-label="Nine encounters"></div>
-        <div class="encounter-count"><span id="encounter-number">01</span><span>/ 09<br>ENCOUNTERS</span></div>
+        <div class="route" id="route" aria-label="Fifteen randomized encounters"></div>
+        <div class="encounter-count"><span id="encounter-number">01</span><span>/ 15<br>ENCOUNTERS</span></div>
       </section>
 
       <section class="arena forest" id="arena" aria-label="Battle arena">
@@ -72,19 +75,25 @@
       <section class="battle-console" aria-label="Dice and combat actions">
         <div class="console-heading">
           <div><p class="eyebrow">FORTUNE IS IN YOUR HANDS</p><h2 id="phase-title">Make your own luck.</h2></div>
-          <p class="phase-instruction" id="phase-instruction">Roll 3 dice, then assign them to attack, guard, or mend.</p>
+          <p class="phase-instruction" id="phase-instruction">Start with one attack die. Slay monsters to buy more.</p>
         </div>
         <div class="controls-layout">
           <div class="dice-panel">
-            <div class="dice-tray" id="dice-tray" aria-label="Your three dice"></div>
-            <div class="dice-tools"><span id="dice-caption">THREE DICE. ONE DESTINY.</span><button class="reroll-button" id="reroll-button" disabled>↻ Reroll selected <span>1 left</span></button></div>
+            <div class="collection-heading"><span>YOUR DICE</span><b id="dice-count">1 / 6</b></div>
+            <div class="dice-tray" id="dice-tray" aria-label="Your specialized dice"></div>
+            <div class="dice-tools"><span id="dice-caption">ONE DIE. A NEW BEGINNING.</span><button class="reroll-button" id="reroll-button" disabled>↻ Reroll selected <span>1 left</span></button></div>
+            <p class="die-description" id="die-description"></p>
           </div>
           <div class="assignment-panel">
             <div class="action-slots">
-              <button class="action-slot attack" id="assign-attack" disabled><span class="action-symbol">⚔</span><span class="action-copy"><strong>Attack</strong><small>Hurt the monster</small></span><span class="action-value" id="attack-value">0</span><span class="slot-dice" id="attack-dice">NO DICE</span></button>
-              <button class="action-slot guard" id="assign-guard" disabled><span class="action-symbol">⬡</span><span class="action-copy"><strong>Guard</strong><small>Block this turn</small></span><span class="action-value" id="guard-value">0</span><span class="slot-dice" id="guard-dice">NO DICE</span></button>
-              <button class="action-slot mend" id="assign-mend" disabled><span class="action-symbol">✚</span><span class="action-copy"><strong>Mend</strong><small>Restore health</small></span><span class="action-value" id="mend-value">0</span><span class="slot-dice" id="mend-dice">NO DICE</span></button>
+              <div class="action-slot attack" id="summary-attack"><span class="action-symbol">⚔</span><span class="action-copy"><strong>Attack</strong><small>Hurt the monster</small></span><span class="action-value" id="attack-value">0</span><span class="slot-dice" id="attack-dice">ROLL TO REVEAL</span></div>
+              <div class="action-slot guard" id="summary-guard"><span class="action-symbol">⬡</span><span class="action-copy"><strong>Guard</strong><small>Block this turn</small></span><span class="action-value" id="guard-value">0</span><span class="slot-dice" id="guard-dice">ROLL TO REVEAL</span></div>
+              <div class="action-slot mend" id="summary-mend"><span class="action-symbol">✚</span><span class="action-copy"><strong>Heal</strong><small>Restore health</small></span><span class="action-value" id="mend-value">0</span><span class="slot-dice" id="mend-dice">ROLL TO REVEAL</span></div>
             </div>
+            <div class="special-effects" id="special-effects"></div>
+            <div class="ability-heading">ABILITIES <span>ONE USE EACH PER BATTLE</span></div>
+            <div class="ability-bar" id="ability-bar"></div>
+            <div class="skill-list" id="skill-list" aria-label="Purchased skills"></div>
             <div class="commit-row"><span id="combat-preview">A roll of 6 on Attack adds +3 critical damage.</span><button class="primary-button" id="main-button"><span id="main-button-text">Roll the dice</span><span class="button-arrow">↗</span></button></div>
           </div>
         </div>
@@ -93,14 +102,24 @@
       <footer><span>ROLL THE DICE. DEFY THE DARKNESS.</span><span>DICE ATTACK <span class="footer-dot">·</span> MADE BY MAX</span></footer>
     </main>
   </div>
-  <div class="overlay" id="reward-overlay" hidden>
-    <section class="modal reward-modal" role="dialog" aria-modal="true" aria-labelledby="reward-title" tabindex="-1">
-      <div class="modal-emblem">✦</div>
-      <p class="eyebrow">THE DARKNESS RETREATS</p>
-      <h2 id="reward-title">A well-earned victory.</h2>
-      <p class="modal-description" id="reward-description"></p>
-      <div class="reward-cards" id="reward-cards"></div>
-      <p class="modal-footnote">Choose one blessing to carry into the next encounter.</p>
+  <div class="overlay" id="shop-overlay" hidden>
+    <section class="modal shop-modal" role="dialog" aria-modal="true" aria-labelledby="shop-title" tabindex="-1">
+      <div class="shop-heading"><div><p class="eyebrow">A MOMENT OF RESPITE</p><h2 id="shop-title">The Wayfarer's Market</h2></div><span class="shop-purse" id="shop-purse"></span></div>
+      <p class="modal-description" id="shop-description"></p>
+      <div class="shop-status" id="shop-status"></div>
+      <div class="shop-tabs" id="shop-tabs" aria-label="Shop categories">
+        <button data-filter="all" aria-pressed="true">All wares</button><button data-filter="dice" aria-pressed="false">Dice</button><button data-filter="ability" aria-pressed="false">Abilities</button><button data-filter="skill" aria-pressed="false">Skills</button>
+      </div>
+      <div class="shop-stock" id="shop-stock"></div>
+      <div class="shop-utilities"><button class="secondary-button" id="refresh-shop">↻ New stock · 5 gold</button><button class="secondary-button" id="shop-rest">✚ Restore 12 HP · 8 gold</button></div>
+      <div class="shop-footer"><button class="reset-button" id="shop-reset">↻ Reset run</button><p>Purchases last this run.<br>Build a collection of up to 6 dice.</p><button class="primary-button" id="leave-shop">Venture onward <span class="button-arrow">↗</span></button></div>
+    </section>
+  </div>
+  <div class="overlay" id="reset-overlay" hidden>
+    <section class="modal end-modal" role="dialog" aria-modal="true" aria-labelledby="reset-title" tabindex="-1">
+      <div class="modal-emblem">↻</div><p class="eyebrow">A FRESH ROLL OF FATE</p><h2 id="reset-title">Begin a different run?</h2>
+      <p class="modal-description">Your current gold, dice, abilities, and skills will be lost. Your best record stays. A new path and new merchant wares await.</p>
+      <div class="reset-actions"><button class="secondary-button" id="cancel-reset">Keep this run</button><button class="primary-button" id="confirm-reset">Reset expedition ↗</button></div>
     </section>
   </div>
   <div class="overlay" id="end-overlay" hidden>
@@ -120,13 +139,13 @@
       <p class="eyebrow">A LITTLE KNOWLEDGE. A LITTLE LUCK.</p>
       <h2 id="help-title">How to defy the darkness.</h2>
       <div class="help-steps">
-        <p><b>01 <strong>Roll your dice.</strong></b> You get three six-sided dice each turn. Select a die and reroll it once per turn if you want to risk a better result.</p>
-        <p><b>02 <strong>Choose their fate.</strong></b> Click a die, then Attack, Guard, or Mend. Assign multiple dice to the same action. Click an assigned die to move it.</p>
-        <p><b>03 <strong>Make your move.</strong></b> Attack deals the rolled value as damage; every attack die showing 6 adds +3. Guard blocks its value for this turn. Mend heals its value, up to your maximum health. Blessings improve these values.</p>
-        <p><b>04 <strong>Read your enemy.</strong></b> The monster shows its next move. Your healing and attack resolve first, then a surviving monster acts. Enemy shields block damage before health. Unused guard disappears at the end of the turn. Monsters gain +1 damage every three turns, so don't wait forever!</p>
-        <p><b>05 <strong>Go deeper.</strong></b> Beat nine monsters across three chapters. After each victory, recover 8 health and choose a permanent blessing. Defeat the last demon to win.</p>
+        <p><b>01 <strong>One die. Endless possibilities.</strong></b> Start with one Attack die. Roll your whole collection each turn; each die automatically performs its own effect. Select a rolled die to reroll it. You get one reroll each turn, or two with the Lucky Fingers skill.</p>
+        <p><b>02 <strong>Build your collection.</strong></b> Attack dice deal their value as damage, with +3 on a six. Guard dice block their value for this turn; Heal dice restore their value. Venom adds poison, Flame ignores shields, Blood attacks and heals, and Fortune earns gold and blocks half its roll. Hover or select a die to read its exact effect.</p>
+        <p><b>03 <strong>Spend your spoils.</strong></b> Every kill earns gold and restores 8 health. The shop appears after every five enemies, before the next chapter. Spend your saved gold on up to six dice, reusable abilities, and permanent skills. Abilities are free to cast once per battle; skills improve your entire run. You can also buy healing or refresh the stock once per shop.</p>
+        <p><b>04 <strong>Read your enemy.</strong></b> You heal and attack first, poison then ticks, and surviving monsters act. Shields block normal damage, not Flame or poison. Poison stacks up to 12 and loses 1 strength each turn. Monsters gain +1 damage every three turns. Frost Seal skips their next action.</p>
+        <p><b>05 <strong>No two paths alike.</strong></b> Each run draws fifteen encounters, three bosses, chapter omens, and merchant stock at random. Omens give a bonus for their chapter. Shops await after enemies 5 and 10; defeating the final boss ends the run. Reset at any time between actions to start a fresh run.</p>
       </div>
-      <p class="modal-footnote">Keyboard: 1–3 select dice · A attack · G guard · M mend · R reroll · Space roll / fight</p>
+      <p class="modal-footnote">Keyboard: 1–6 select dice · R reroll · Space roll / fight · Escape close instructions / cancel reset</p>
       <button class="primary-button" id="help-play-button">Let fate decide <span class="button-arrow">↗</span></button>
     </section>
   </div>

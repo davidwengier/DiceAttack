@@ -3,7 +3,33 @@
 
   const $ = (id) => document.getElementById(id);
   const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-  const icons = { attack: "⚔", guard: "⬡", mend: "✚" };
+  const MAX_DICE = 6;
+  const RUN_LENGTH = 15;
+  const SHOP_INTERVAL = 5;
+  const diceTypes = {
+    attack: { name: "Attack Die", label: "ATTACK", icon: "⚔", price: 18, text: "Deal your roll as damage. Sixes add +3 critical damage, improved by Loaded Fate." },
+    guard: { name: "Guard Die", label: "GUARD", icon: "⬡", price: 14, text: "Block your roll's worth of damage this turn. Moonward adds +1 per level." },
+    mend: { name: "Heal Die", label: "HEAL", icon: "✚", price: 16, text: "Restore your roll's worth of health. Lifebloom adds +1 per level." },
+    venom: { name: "Venom Die", label: "VENOM", icon: "❧", price: 22, text: "Add half your roll, rounded up, as poison. Poison bypasses shields and ticks before the enemy acts." },
+    flame: { name: "Flame Die", label: "FLAME", icon: "✦", price: 26, text: "Deal your roll +2 damage, ignoring shields. Ember Edge also increases this damage." },
+    blood: { name: "Blood Die", label: "BLOOD", icon: "♡", price: 28, text: "Deal your roll as damage and restore half your roll, rounded up. Attack and healing skills both help." },
+    fortune: { name: "Fortune Die", label: "GOLD", icon: "◈", price: 18, text: "Earn your roll in gold and block half your roll, rounded up. Moonward improves the block." }
+  };
+  const abilities = {
+    fireball: { name: "Ember Bolt", icon: "✦", price: 24, text: "Deal 10 damage ignoring shields. One free cast per battle." },
+    salve: { name: "Healing Spring", icon: "✚", price: 22, text: "Restore 14 health. One free cast per battle." },
+    freeze: { name: "Frost Seal", icon: "❄", price: 26, text: "Freeze the enemy, skipping its next action. One free cast per battle." }
+  };
+  const skills = {
+    power: { name: "Ember Edge", icon: "⚔", price: 14, max: 3, text: "+1 damage per Attack, Blood, and Flame die.", apply: () => { state.power++; } },
+    ward: { name: "Moonward", icon: "⬡", price: 12, max: 3, text: "+1 block per Guard and Fortune die.", apply: () => { state.ward++; } },
+    healing: { name: "Lifebloom", icon: "✚", price: 12, max: 3, text: "+1 healing per Heal and Blood die.", apply: () => { state.healing++; } },
+    vitality: { name: "Lionheart", icon: "♡", price: 16, max: 3, text: "+8 maximum health and restore 8 health now.", apply: () => { state.maxHp += 8; state.hp = Math.min(state.maxHp, state.hp + 8); } },
+    critical: { name: "Loaded Fate", icon: "✦", price: 14, max: 3, text: "+2 extra damage on Attack rolls of six.", apply: () => { state.critBonus += 2; } },
+    recovery: { name: "Second Wind", icon: "❧", price: 16, max: 3, text: "Recover 4 extra health after each victory. Heal 4 now.", apply: () => { state.recovery += 4; state.hp = Math.min(state.maxHp, state.hp + 4); } },
+    luck: { name: "Lucky Fingers", icon: "↻", price: 22, max: 1, text: "A second reroll on every turn.", apply: () => { state.extraRerolls = 1; } },
+    loot: { name: "Treasure Hunter", icon: "◈", price: 18, max: 3, text: "+25% kill gold per level, rounded up.", apply: () => { state.lootBonus += .25; } }
+  };
   const pipPositions = {
     1: [5], 2: [1, 9], 3: [1, 5, 9], 4: [1, 3, 7, 9],
     5: [1, 3, 5, 7, 9], 6: [1, 3, 4, 6, 7, 9]
@@ -13,54 +39,109 @@
     { title: "The Hollow Catacombs", label: "CHAPTER II · THE CATACOMBS", className: "crypt" },
     { title: "The Ember Throne", label: "CHAPTER III · THE INFERNO", className: "inferno" }
   ];
-  const encounters = [
-    { name: "Moss Slime", type: "slime", hp: 18, color: "#8acb86", role: "WILD CREATURE", flavor: "Something stirs beneath the ancient trees.", moves: [["attack", 4, "Sticky slap"], ["attack", 5, "Slime splash"], ["guard", 4, "Gelatinous shell"]] },
-    { name: "Briar Slime", type: "slime", hp: 25, color: "#9ebd60", thorns: true, role: "THORNBOUND CREATURE", flavor: "Even the smallest creature has its thorns.", moves: [["attack", 5, "Briar lash"], ["heavy", 7, "Thorn burst"], ["guard", 5, "Barkskin"]] },
-    { name: "Slime Sovereign", type: "slime", hp: 38, color: "#71c7b2", boss: true, role: "GUARDIAN OF THE WILDS", flavor: "A crown of stolen gold. A kingdom of moss.", moves: [["attack", 6, "Royal splash"], ["guard", 6, "Royal jelly"], ["heavy", 10, "King's crush"]] },
-    { name: "Bonewalker", type: "skeleton", hp: 30, role: "RESTLESS DEAD", flavor: "Some footsteps never stop echoing.", moves: [["attack", 6, "Rusty slash"], ["heavy", 8, "Bone cleaver"], ["guard", 5, "Bone barrier"]] },
-    { name: "Crypt Sentinel", type: "skeleton", hp: 39, armored: true, role: "UNDYING WATCHMAN", flavor: "Its oath outlived its flesh.", moves: [["guard", 7, "Iron bulwark"], ["attack", 7, "Sentinel strike"], ["heavy", 10, "Gravebreaker"]] },
-    { name: "The Hollow King", type: "skeleton", hp: 54, boss: true, armored: true, role: "LORD OF THE CATACOMBS", flavor: "He has waited centuries for a worthy challenger.", moves: [["attack", 8, "Cursed blade"], ["guard", 8, "Crown's protection"], ["heavy", 12, "Death sentence"]] },
-    { name: "Ember Imp", type: "demon", hp: 42, color: "#cf755b", role: "CREATURE OF THE RIFT", flavor: "A mischievous spark in an endless furnace.", moves: [["attack", 8, "Fire claw"], ["drain", 6, "Soul sip"], ["heavy", 11, "Ember storm"]] },
-    { name: "Ashborn Reaver", type: "demon", hp: 52, color: "#b8697b", role: "INFERNAL HUNTER", flavor: "Forged in fire. Tempered by fury.", moves: [["heavy", 12, "Rift strike"], ["guard", 7, "Obsidian hide"], ["drain", 9, "Soul harvest"]] },
-    { name: "Azrath, the Last Flame", type: "demon", hp: 78, color: "#cd6249", boss: true, role: "SOVEREIGN OF THE INFERNO", flavor: "One final roll between you and the darkness.", moves: [["attack", 10, "Hellfire"], ["drain", 9, "Devour hope"], ["guard", 9, "Infernal aegis"], ["heavy", 15, "The last flame"]] }
+  const monsters = [
+    { name: "Moss Slime", zone: 0, type: "slime", color: "#8acb86", moves: [["attack", 1, "Sticky slap"], ["attack", 1.2, "Slime splash"], ["guard", .8, "Gel shell"]] },
+    { name: "Briar Slime", zone: 0, type: "slime", color: "#9ebd60", thorns: true, moves: [["attack", 1, "Briar lash"], ["heavy", 1.4, "Thorn burst"], ["guard", .8, "Barkskin"]] },
+    { name: "Moonfang Wolf", zone: 0, type: "wolf", color: "#899aab", moves: [["attack", 1, "Snap"], ["heavy", 1.4, "Moonfang bite"], ["attack", .8, "Pounce"]] },
+    { name: "Silkfang Spider", zone: 0, type: "spider", color: "#9877a2", moves: [["attack", .8, "Venom bite"], ["guard", 1, "Silken armor"], ["heavy", 1.4, "Fang lunge"]] },
+    { name: "Sporeling", zone: 0, type: "slime", color: "#cc9cba", mushroom: true, moves: [["drain", .8, "Spore siphon"], ["attack", 1, "Cap bash"], ["guard", .7, "Spore cloud"]] },
+    { name: "Mossstone Golem", zone: 0, type: "golem", color: "#718c73", moves: [["guard", 1, "Stone skin"], ["heavy", 1.4, "Boulder fist"], ["attack", .8, "Rumble"]] },
+    { name: "Slime Sovereign", zone: 0, type: "slime", color: "#71c7b2", boss: true, moves: [["attack", 1, "Royal splash"], ["guard", 1, "Royal jelly"], ["heavy", 1.4, "King's crush"]] },
+    { name: "The Thorn Matriarch", zone: 0, type: "spider", color: "#af7f9c", boss: true, moves: [["heavy", 1.3, "Royal fangs"], ["drain", .8, "Brood hunger"], ["guard", 1, "Thorn cocoon"]] },
+    { name: "Bonewalker", zone: 1, type: "skeleton", moves: [["attack", 1, "Rusty slash"], ["heavy", 1.3, "Bone cleaver"], ["guard", .8, "Bone barrier"]] },
+    { name: "Crypt Sentinel", zone: 1, type: "skeleton", armored: true, moves: [["guard", 1, "Iron bulwark"], ["attack", 1, "Sentinel strike"], ["heavy", 1.4, "Gravebreaker"]] },
+    { name: "Lantern Wraith", zone: 1, type: "wraith", color: "#88a8ce", moves: [["drain", .8, "Soul whisper"], ["attack", 1, "Phantom touch"], ["heavy", 1.3, "Haunting"]] },
+    { name: "Graveweaver", zone: 1, type: "spider", color: "#7b879d", moves: [["guard", 1, "Grave silk"], ["attack", 1.1, "Bone bite"], ["heavy", 1.3, "Web strike"]] },
+    { name: "Runestone Guardian", zone: 1, type: "golem", color: "#8393aa", moves: [["heavy", 1.3, "Rune smash"], ["guard", 1.1, "Runic barrier"], ["attack", .9, "Stone palm"]] },
+    { name: "Dusk Acolyte", zone: 1, type: "cultist", color: "#83709f", moves: [["drain", .8, "Dark prayer"], ["guard", .9, "Veil"], ["heavy", 1.4, "Dusk bolt"]] },
+    { name: "The Hollow King", zone: 1, type: "skeleton", boss: true, armored: true, moves: [["attack", 1, "Cursed blade"], ["guard", 1, "Crown's ward"], ["heavy", 1.4, "Death sentence"]] },
+    { name: "Lady of Lost Souls", zone: 1, type: "wraith", color: "#ba98dc", boss: true, moves: [["drain", 1, "Devour memory"], ["heavy", 1.3, "Soul tempest"], ["guard", .9, "Spectral veil"]] },
+    { name: "Ember Imp", zone: 2, type: "demon", color: "#cf755b", moves: [["attack", 1, "Fire claw"], ["drain", .8, "Soul sip"], ["heavy", 1.3, "Ember storm"]] },
+    { name: "Ashborn Reaver", zone: 2, type: "demon", color: "#b8697b", moves: [["heavy", 1.3, "Rift strike"], ["guard", .9, "Obsidian hide"], ["drain", 1, "Soul harvest"]] },
+    { name: "Obsidian Gargoyle", zone: 2, type: "golem", color: "#827c91", wings: true, moves: [["guard", 1.1, "Obsidian shell"], ["heavy", 1.3, "Dive crush"], ["attack", 1, "Stone talons"]] },
+    { name: "Cinder Wolf", zone: 2, type: "wolf", color: "#bd8a73", moves: [["heavy", 1.3, "Blazing bite"], ["attack", 1, "Cinder claw"], ["drain", .8, "Blood hunger"]] },
+    { name: "Rift Specter", zone: 2, type: "wraith", color: "#c287a1", moves: [["drain", .9, "Rift siphon"], ["guard", .8, "Void shroud"], ["heavy", 1.4, "Reality tear"]] },
+    { name: "Flame Cultist", zone: 2, type: "cultist", color: "#b16b65", moves: [["attack", 1, "Flame chant"], ["heavy", 1.4, "Pyre blast"], ["guard", .9, "Ash ward"]] },
+    { name: "Azrath, Last Flame", zone: 2, type: "demon", color: "#cd6249", boss: true, moves: [["attack", 1, "Hellfire"], ["drain", .9, "Devour hope"], ["guard", 1, "Infernal aegis"], ["heavy", 1.4, "Last flame"]] },
+    { name: "The Ash Titan", zone: 2, type: "golem", color: "#ab7b70", wings: true, boss: true, moves: [["heavy", 1.5, "Worldbreaker"], ["guard", 1, "Molten armor"], ["drain", .9, "Ember hunger"]] }
   ];
-  const blessings = [
-    { name: "Ember Edge", icon: "⚔", text: "+1 damage for every die assigned to Attack.", tag: "PERMANENT · ATTACK", apply: () => { state.power++; } },
-    { name: "Moonward", icon: "⬡", text: "+1 block for every die assigned to Guard.", tag: "PERMANENT · GUARD", apply: () => { state.ward++; } },
-    { name: "Lifebloom", icon: "✚", text: "+1 healing for every die assigned to Mend.", tag: "PERMANENT · HEALING", apply: () => { state.healing++; } },
-    { name: "Lionheart", icon: "♡", text: "+8 maximum health. Also restore 8 health now.", tag: "PERMANENT · VITALITY", apply: () => { state.maxHp += 8; state.hp = Math.min(state.maxHp, state.hp + 8); } },
-    { name: "Loaded Fate", icon: "✦", text: "Attack rolls of 6 deal another +2 critical damage.", tag: "PERMANENT · CRITICAL", apply: () => { state.critBonus += 2; } },
-    { name: "Second Wind", icon: "❧", text: "Recover an extra 4 health after every victory, starting now.", tag: "PERMANENT · RECOVERY", apply: () => { state.recovery += 4; state.hp = Math.min(state.maxHp, state.hp + 4); } }
+  const omens = [
+    { name: "Gilded Skies", text: "+4 gold from every kill", gold: 4 },
+    { name: "Lifebloom Mist", text: "+1 healing from Heal and Blood dice", healing: 1 },
+    { name: "Iron Moon", text: "+1 block from Guard and Fortune dice", ward: 1 },
+    { name: "Ember Stars", text: "+1 damage from Attack, Blood, and Flame dice", power: 1 },
+    { name: "Lucky Constellation", text: "+2 critical damage on Attack sixes", critical: 2 },
+    { name: "Gentle Rain", text: "+4 health recovered after each victory", recovery: 4 }
   ];
+  const shuffle = (items) => {
+    const result = [...items];
+    for (let i = result.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [result[i], result[j]] = [result[j], result[i]];
+    }
+    return result;
+  };
+  function generateRun() {
+    const health = [8, 10, 12, 15, 23, 27, 33, 39, 45, 60, 54, 63, 72, 83, 115];
+    const damage = [1, 2, 2, 3, 4, 5, 6, 7, 8, 9, 8, 9, 10, 11, 13];
+    return zones.flatMap((zone, zoneIndex) => {
+      const regulars = shuffle(monsters.filter((monster) => monster.zone === zoneIndex && !monster.boss)).slice(0, 4);
+      const boss = shuffle(monsters.filter((monster) => monster.zone === zoneIndex && monster.boss))[0];
+      return [...regulars, boss].map((monster, slot) => {
+        const index = zoneIndex * SHOP_INTERVAL + slot;
+        const elite = zoneIndex > 0 && !monster.boss && Math.random() < .3;
+        const gold = 19 + index * 2 + (monster.boss ? 12 : 0) + (elite ? 6 : 0);
+        return {
+          ...monster, name: `${elite ? "Frenzied " : ""}${monster.name}`, elite,
+          hp: Math.round(health[index] * (.94 + Math.random() * .12) * (elite ? 1.1 : 1)),
+          gold: gold + Math.floor(Math.random() * 4),
+          role: monster.boss ? "CHAPTER GUARDIAN" : elite ? "FRENZIED CREATURE" : ["CREATURE OF THE WILDS", "RESTLESS DARKNESS", "INFERNAL CREATURE"][zoneIndex],
+          flavor: monster.boss ? "The guardian of this chapter stands before you." : ["A different path. A new danger beneath the trees.", "Something forgotten moves in the darkness.", "The rift has many horrors. This is one of them."][zoneIndex],
+          moveOffset: Math.floor(Math.random() * monster.moves.length),
+          moves: monster.moves.map(([kind, factor, name]) => [kind, Math.max(1, Math.round(damage[index] * factor) + (elite && kind !== "guard" ? 1 : 0)), name])
+        };
+      });
+    });
+  }
   let state;
   let best = 0;
   let soundEnabled = false;
   let audio;
   let helpReturnFocus;
+  let resetReturnFocus;
+  let runSerial = 0;
   let toastTimer;
   const wait = (ms) => new Promise((resolve) => setTimeout(resolve, reducedMotion ? Math.min(ms, 25) : ms));
   const rollDie = () => Math.floor(Math.random() * 6) + 1;
 
-  function notify(message) {
+  function notify(message, severity = "info") {
     $("toast").textContent = message;
+    $("toast").dataset.severity = severity;
     $("toast").hidden = false;
     clearTimeout(toastTimer);
     toastTimer = setTimeout(() => { $("toast").hidden = true; }, 5500);
   }
 
+  function clearInfoToast() {
+    if ($("toast").dataset.severity !== "error") {
+      clearTimeout(toastTimer);
+      $("toast").hidden = true;
+    }
+  }
+
   function readRecord() {
     try {
-      const stored = Number(localStorage.getItem("diceattack-best"));
-      best = Number.isInteger(stored) && stored >= 0 && stored <= 9 ? stored : 0;
+      const stored = Number(localStorage.getItem("diceattack-roguelike-best"));
+      best = Number.isInteger(stored) && stored >= 0 && stored <= RUN_LENGTH ? stored : 0;
     } catch (error) {
       console.warn("Dice Attack cannot read local expedition records.", error);
-      notify("Your browser has blocked save data. You can still play, but records won't be saved.");
+      notify("Your browser has blocked save data. You can still play, but records won't be saved.", "error");
     }
     updateRecord();
   }
 
   function updateRecord() {
-    $("record").innerHTML = `BEST EXPEDITION <b>${best ? `${best} / 9` : "—"}</b>`;
+    $("record").innerHTML = `BEST EXPEDITION <b>${best ? `${best} / ${RUN_LENGTH}` : "—"}</b>`;
   }
 
   function saveRecord() {
@@ -68,10 +149,10 @@
     best = state.defeated;
     updateRecord();
     try {
-      localStorage.setItem("diceattack-best", String(best));
+      localStorage.setItem("diceattack-roguelike-best", String(best));
     } catch (error) {
       console.warn("Dice Attack cannot save the expedition record.", error);
-      notify("Your new record could not be saved. Browser storage is unavailable.");
+      notify("Your new record could not be saved. Browser storage is unavailable.", "error");
     }
   }
 
@@ -81,7 +162,7 @@
     if (!AudioContextClass) {
       soundEnabled = false;
       renderSoundButton();
-      notify("Sound is not supported by this browser.");
+      notify("Sound is not supported by this browser.", "error");
       return;
     }
     if (!audio) audio = new AudioContextClass();
@@ -90,7 +171,7 @@
         console.warn("Dice Attack audio could not start.", error);
         soundEnabled = false;
         renderSoundButton();
-        notify("Sound could not start. The game will continue without audio.");
+        notify("Sound could not start. The game will continue without audio.", "error");
       });
     }
     const notes = { roll: [420, 310], select: [520], hit: [130, 70], heal: [440, 660], block: [240, 360], victory: [440, 550, 660, 880], loss: [220, 185, 147] };
@@ -234,6 +315,73 @@
     `, `<linearGradient id="demon-body" x2=".8" y2="1"><stop stop-color="#e9a17c"/><stop offset=".35" stop-color="${enemy.color}"/><stop offset="1" stop-color="#85445a"/></linearGradient><linearGradient id="demon-wing" x2=".5" y2="1"><stop stop-color="#784656"/><stop offset="1" stop-color="#3e3044"/></linearGradient><linearGradient id="demon-horn" x2=".6" y2="1"><stop stop-color="#eddbb6"/><stop offset="1" stop-color="#a68b7b"/></linearGradient>`);
   }
 
+  function creatureArtwork(enemy) {
+    const color = enemy.color;
+    const defs = `<linearGradient id="creature-body" x2=".8" y2="1"><stop stop-color="${color}"/><stop offset="1" stop-color="#364556"/></linearGradient><radialGradient id="creature-glow"><stop stop-color="#e5ffd6"/><stop offset="1" stop-color="${color}"/></radialGradient>`;
+    if (enemy.type === "wolf") return svgFrame(`
+      <path d="M65 180Q16 185 26 149l22 10 27-23" fill="${color}" stroke="#34404e" stroke-width="4"/>
+      <path d="m72 164-14 44-12 20 30-1 15-36 17-16m39-8 17 41-4 19 31 1-9-19-9-52" fill="url(#creature-body)" stroke="#34404e" stroke-width="4"/>
+      <path d="M63 114q28-31 79-18l41 52-18 40-45-5-42 15-25-28Z" fill="url(#creature-body)" stroke="#34404e" stroke-width="4"/>
+      <path d="m82 118-22 1 12 14-22 2 18 15-14 13 29 11 13-23" fill="${color}" stroke="#34404e" stroke-width="3"/>
+      <path d="m142 55-9-29 30 15 27-15-4 37 12 46-24 35-33-13-21-37Z" fill="url(#creature-body)" stroke="#34404e" stroke-width="4"/>
+      <path d="m143 49-3-15 16 10m22 2 6-11-2 18" stroke="#dfbbba" stroke-width="6"/>
+      <path d="m145 80 13 4m15-2 12-5" stroke="#f5e8ae" stroke-width="5" stroke-linecap="round"/>
+      <path d="m162 92 25 8-12 26-27-3-8-13Z" fill="#b9b9a7" stroke="#52616a" stroke-width="3"/>
+      <path d="m166 99 15 3-9 9Z" fill="#263b45"/><path d="m151 118 22 1" stroke="#263b45" stroke-width="3"/>
+      <path d="m153 121 3 8 4-8m7-1 4 7 3-8" fill="#e8e5cd"/>
+      <path d="m65 227 4-6m-13 6 4-6m122 5-2-6m9 6-3-6" stroke="#d3d7c5" stroke-width="3"/>
+    `, defs);
+    if (enemy.type === "spider") return svgFrame(`
+      <g stroke="#33424c" stroke-width="14" stroke-linecap="round" stroke-linejoin="round">
+        <path d="m89 144-44-38-25 51m63-2-52-4-17 42m70-29-49 24 1 32m114-73 43-41 27 51m-62-1 53-8 19 44m-75-27 49 23-1 34"/>
+      </g>
+      <g stroke="${color}" stroke-width="8" stroke-linecap="round" stroke-linejoin="round">
+        <path d="m89 144-44-38-25 51m63-2-52-4-17 42m70-29-49 24 1 32m114-73 43-41 27 51m-62-1 53-8 19 44m-75-27 49 23-1 34"/>
+      </g>
+      <ellipse cx="119" cy="121" rx="51" ry="54" fill="url(#creature-body)" stroke="#33424c" stroke-width="4"/>
+      <path d="m120 80 16 23-16 30-17-30Z" fill="#d9bba8" opacity=".6"/>
+      <ellipse cx="120" cy="173" rx="44" ry="32" fill="${color}" stroke="#33424c" stroke-width="4"/>
+      <g class="monster-eye" fill="#f5d59c"><circle cx="106" cy="166" r="7"/><circle cx="135" cy="166" r="7"/><circle cx="94" cy="156" r="4"/><circle cx="147" cy="156" r="4"/></g>
+      <path d="m103 188-8 17 16-8m25-10 8 18-16-8" fill="#e3d6b9" stroke="#56616b" stroke-width="2"/>
+      ${enemy.boss ? '<path d="m90 91-5-22 24 8 11-21 12 20 21-9-3 25Z" fill="#e1bb76" stroke="#927444" stroke-width="3"/>' : ""}
+    `, defs);
+    if (enemy.type === "golem") return svgFrame(`
+      ${enemy.wings ? `<path d="M77 108 24 58 18 129l26-13-8 47 44-25m82-30 54-50 6 72-25-14 5 48-43-28" fill="#595469" stroke="#353548" stroke-width="4"/>` : ""}
+      <path d="m85 171-15 53 36 9 13-51m8-1 6 48 37-5-17-54" fill="url(#creature-body)" stroke="#303e49" stroke-width="5"/>
+      <path d="m71 104 48-16 52 14 6 70-34 23-46-4-32-24Z" fill="url(#creature-body)" stroke="#303e49" stroke-width="5"/>
+      <path d="m78 106-29 1-20 36 1 43 35 1 11-45m90-37 29 3 17 38-1 42-31-1-9-48" fill="${color}" stroke="#303e49" stroke-width="5"/>
+      <path d="m47 135 13 6m-21 24 20 1m123-27 17-4m-16 33 22-1" stroke="#d5d0bc50" stroke-width="3"/>
+      <path d="m85 42 32-10 40 13 7 48-32 18-45-14-9-29Z" fill="url(#creature-body)" stroke="#303e49" stroke-width="5"/>
+      <path d="m94 65 18 5m17-1 18-5" stroke="${enemy.zone === 2 ? "#ffd18d" : "#d0f5bc"}" stroke-width="6" stroke-linecap="round"/>
+      <path d="m105 90 30-1m-39-47 12 13-3 10m44 26-11-7" stroke="#35434e" stroke-width="4"/>
+      <path d="m119 122 16 20-16 27-16-27Z" fill="url(#creature-glow)"/><path d="m119 132 7 10-7 14-6-14Z" fill="#f0ffdf"/>
+      ${enemy.boss ? '<path d="m91 39-4-24 22 9 12-17 13 18 20-10-1 27" fill="#c1a075" stroke="#82634e" stroke-width="3"/>' : ""}
+    `, defs);
+    if (enemy.type === "wraith") return svgFrame(`
+      <ellipse cx="120" cy="225" rx="66" ry="13" fill="${color}" opacity=".12"/>
+      <path d="M92 91q-38 15-41 59l25-16-3 52-31 42 39-10 11 16 30-18 21 19 20-17 35 9-24-49-11-68Z" fill="url(#creature-body)" stroke="#51647c" stroke-width="3" opacity=".9"/>
+      <path d="m87 146-7 54 17-12 7 20 18-22 22 20-1-36" stroke="#bed9dd" stroke-opacity=".3" stroke-width="3"/>
+      <path d="M79 88q6-54 42-58 37 8 45 60l-12 46-35 18-32-22Z" fill="${color}" stroke="#51647c" stroke-width="3"/>
+      <path d="M92 88q4-39 29-42 26 10 31 43l-13 40-20 9-21-12Z" fill="#243244"/>
+      <g class="monster-eye"><path d="m102 89 10 3m15 0 12-3" stroke="#edffdb" stroke-width="5" stroke-linecap="round"/></g>
+      <path d="m111 117 7-7 7 7" stroke="#94bccc" stroke-width="3"/>
+      <path d="m67 129-26 15-13 27 17 10 22-24m100-30 27 17 14 26-17 11-22-24" fill="${color}" stroke="#51647c" stroke-width="3"/>
+      ${enemy.boss ? '<path d="m93 49-3-21 19 9 13-23 11 23 17-7-1 24" fill="#c8a878" stroke="#917556" stroke-width="3"/>' : ""}
+    `, defs);
+    return svgFrame(`
+      <path d="M87 104q-23 24-28 125l40-8 22 14 24-14 36 8q-5-96-33-127Z" fill="url(#creature-body)" stroke="#35364b" stroke-width="4"/>
+      <path d="m84 139-12 75 26-9 22 13 23-13 23 11-11-79" stroke="#dec69855" stroke-width="3"/>
+      <path d="M85 85q2-49 36-60 32 15 34 61l-16 40-37-1Z" fill="${color}" stroke="#35364b" stroke-width="4"/>
+      <path d="M96 83q1-26 25-41 25 19 23 43l-9 29-28-1Z" fill="#263043"/>
+      <path d="m105 87 11 2m11 0 10-3" stroke="#e8d7a4" stroke-width="4" stroke-linecap="round"/>
+      <path d="m118 123-1 68" stroke="#d4b988" stroke-width="5"/><circle cx="120" cy="143" r="8" fill="#e5c185"/>
+      <path d="m82 121-26 29 10 21 23-21m58-27 22 19 10-1" stroke="${color}" stroke-width="17" stroke-linecap="round"/>
+      <path d="m179 222 3-115" stroke="#a18a70" stroke-width="7"/>
+      <path d="m181 111-15-16 15-17 15 17Z" fill="url(#creature-glow)" stroke="#cfc096" stroke-width="3"/>
+      <circle cx="181" cy="94" r="6" fill="#efffce"/>
+    `, defs);
+  }
+
   function sceneArtwork(zone) {
     const sparks = Array.from({ length: 22 }, (_, i) => {
       const x = (i * 137 + 48) % 1200;
@@ -286,63 +434,88 @@
   }
 
   function startRun() {
+    clearInfoToast();
     state = {
-      phase: "ready", encounter: 0, defeated: 0, turn: 1,
+      id: ++runSerial, code: Math.random().toString(36).slice(2, 6).padEnd(4, "0").toUpperCase(),
+      encounters: generateRun(), omens: shuffle(omens).slice(0, 3),
+      phase: "ready", encounter: 0, defeated: 0, turn: 1, gold: 0,
       hp: 40, maxHp: 40, power: 0, ward: 0, healing: 0, critBonus: 3, recovery: 0,
-      dice: [], selected: null, rerolls: 1, enemy: null,
-      stats: { rolls: 0, damage: 0, criticals: 0 }, rewards: []
+      extraRerolls: 0, lootBonus: 0, collection: ["attack"], dice: [],
+      selected: null, rerolls: 1, enemy: null, abilities: [], usedAbilities: new Set(), skills: {},
+      stats: { rolls: 0, damage: 0, criticals: 0, earned: 0 }, stock: [], shopFilter: "all", refreshed: false
     };
-    $("reward-overlay").hidden = true;
-    $("end-overlay").hidden = true;
+    ["shop-overlay", "end-overlay", "reset-overlay", "help-overlay"].forEach((id) => { $(id).hidden = true; });
     $("hero-art").className = "character-art";
     $("hero-art").innerHTML = heroArtwork();
     $("hero-effects").replaceChildren();
     $("enemy-effects").replaceChildren();
     $("battle-log").replaceChildren();
     loadEncounter();
-    log("Your expedition begins. Nine encounters. Three dice. Endless possibility.");
+    log("One attack die. A different path. The first shop awaits after five victories.");
   }
 
   function loadEncounter() {
-    const definition = encounters[state.encounter];
-    state.enemy = { ...definition, maxHp: definition.hp, shield: 0 };
+    const definition = state.encounters[state.encounter];
+    state.enemy = { ...definition, maxHp: definition.hp, shield: 0, poison: 0, frozen: false };
     state.phase = "ready";
     state.turn = 1;
     state.dice = [];
     state.selected = null;
-    state.rerolls = 1;
-    const zoneIndex = Math.floor(state.encounter / 3);
+    state.rerolls = 1 + state.extraRerolls;
+    state.usedAbilities = new Set();
+    const zoneIndex = Math.floor(state.encounter / SHOP_INTERVAL);
     const zone = zones[zoneIndex];
     $("zone-title").textContent = zone.title;
     $("area-label").textContent = zone.label;
     $("arena").className = `arena ${zone.className}`;
     $("scene-art").innerHTML = sceneArtwork(zoneIndex);
-    $("enemy-name").textContent = definition.name;
+    $("enemy-name").textContent = definition.name.replace(/^Frenzied /, "");
+    $("enemy-name").title = definition.name;
     $("enemy-role").textContent = definition.role;
     $("enemy-icon").textContent = definition.boss ? "♛" : ["I", "II", "III"][zoneIndex];
     $("flavor-text").textContent = definition.flavor;
     $("enemy-art").className = `character-art ${definition.type}${definition.boss ? " boss" : ""}`;
-    $("enemy-art").innerHTML = definition.type === "slime" ? slimeArtwork(definition) : definition.type === "skeleton" ? skeletonArtwork(definition) : demonArtwork(definition);
+    $("enemy-art").innerHTML = definition.type === "slime" ? slimeArtwork(definition) : definition.type === "skeleton" ? skeletonArtwork(definition) : definition.type === "demon" ? demonArtwork(definition) : creatureArtwork(definition);
+    if (definition.mushroom) {
+      $("enemy-art").querySelector("svg").insertAdjacentHTML("beforeend", '<path d="M56 105q13-83 69-75 49 3 64 74Z" fill="#af677f" stroke="#663f62" stroke-width="4"/><g fill="#edccbe"><ellipse cx="90" cy="75" rx="11" ry="7"/><ellipse cx="138" cy="53" rx="9" ry="6"/><ellipse cx="163" cy="88" rx="10" ry="7"/></g>');
+    }
     $("ward-aura").classList.remove("visible");
     render();
   }
 
   function getIntent() {
-    const [kind, base, name] = state.enemy.moves[(state.turn - 1) % state.enemy.moves.length];
+    const [kind, base, name] = state.enemy.moves[(state.turn - 1 + state.enemy.moveOffset) % state.enemy.moves.length];
     const rage = Math.floor((state.turn - 1) / 3);
     return { kind, value: kind === "guard" ? base : base + rage, name, rage };
   }
 
   function totals() {
-    const result = { attack: 0, guard: 0, mend: 0, criticals: 0 };
+    const result = { attack: 0, guard: 0, mend: 0, criticals: 0, pierce: 0, poison: 0, gold: 0 };
+    const omen = currentOmen();
+    const power = state.power + (omen.power || 0);
+    const ward = state.ward + (omen.ward || 0);
+    const healing = state.healing + (omen.healing || 0);
     state.dice.forEach((die) => {
-      if (die.assignment === "attack") {
-        result.attack += die.value + state.power + (die.value === 6 ? state.critBonus : 0);
+      if (die.type === "attack") {
+        result.attack += die.value + power + (die.value === 6 ? state.critBonus + (omen.critical || 0) : 0);
         if (die.value === 6) result.criticals++;
-      } else if (die.assignment === "guard") result.guard += die.value + state.ward;
-      else if (die.assignment === "mend") result.mend += die.value + state.healing;
+      } else if (die.type === "guard") result.guard += die.value + ward;
+      else if (die.type === "mend") result.mend += die.value + healing;
+      else if (die.type === "flame") result.pierce += die.value + 2 + power;
+      else if (die.type === "venom") result.poison += Math.ceil(die.value / 2);
+      else if (die.type === "blood") { result.attack += die.value + power; result.mend += Math.ceil(die.value / 2) + healing; }
+      else if (die.type === "fortune") { result.gold += die.value; result.guard += Math.ceil(die.value / 2) + ward; }
     });
     return result;
+  }
+
+  function currentOmen() {
+    return state.omens[Math.floor(state.encounter / SHOP_INTERVAL)];
+  }
+
+  function addGold(amount) {
+    state.gold += amount;
+    state.stats.earned += amount;
   }
 
   function render() {
@@ -356,37 +529,45 @@
     $("hero-healing").textContent = `+${state.healing} healing`;
     $("hero-caption")?.setAttribute("title", `Attack +${state.power} per die. Guard +${state.ward} per die. Mend +${state.healing} per die. Critical bonus +${state.critBonus}.`);
     $("encounter-number").textContent = String(state.encounter + 1).padStart(2, "0");
+    $("gold-counter").innerHTML = `◈ <b>${state.gold}</b>`;
+    $("gold-counter").setAttribute("aria-label", `${state.gold} gold`);
+    const omen = currentOmen();
+    const untilShop = SHOP_INTERVAL - state.defeated % SHOP_INTERVAL;
+    $("run-note").textContent = `RUN ${state.code} · ${omen.name}: ${omen.text} · ${state.encounter >= 10 ? "FINAL CHAPTER" : `SHOP IN ${untilShop} ${untilShop === 1 ? "VICTORY" : "VICTORIES"}`}`;
     $("turn-counter").textContent = `TURN ${String(state.turn).padStart(2, "0")}${intent.rage ? ` · RAGE +${intent.rage}` : ""}`;
-    $("route").innerHTML = encounters.map((encounter, i) => `${i ? '<span class="route-line"></span>' : ""}<span class="route-node${encounter.boss ? " boss" : ""}${i < state.defeated ? " done" : i === state.encounter ? " current" : ""}" aria-label="Encounter ${i + 1}: ${encounter.name}${i < state.defeated ? ", defeated" : i === state.encounter ? ", current" : ""}"${i === state.encounter ? ' aria-current="step"' : ""}><span>${i < state.defeated ? "✓" : encounter.boss ? "♛" : "·"}</span></span>`).join("");
+    $("route").innerHTML = state.encounters.map((encounter, i) => `${i ? '<span class="route-line"></span>' : ""}<span class="route-node${encounter.boss ? " boss" : ""}${i < state.defeated ? " done" : i === state.encounter ? " current" : ""}" aria-label="Encounter ${i + 1}: ${encounter.name}${i < state.defeated ? ", defeated" : i === state.encounter ? ", current" : ""}"${i === state.encounter ? ' aria-current="step"' : ""}><span>${i < state.defeated ? "✓" : encounter.boss ? "♛" : "·"}</span></span>`).join("");
     const intentIcon = intent.kind === "guard" ? "⬡" : intent.kind === "drain" ? "✦" : "⚔";
     const intentSuffix = intent.kind === "guard" ? `gains <strong>${intent.value}</strong> shield` : `<strong>${intent.value}</strong> damage${intent.kind === "drain" ? " + lifesteal" : ""}`;
-    $("intent").innerHTML = `<span class="intent-icon">${intentIcon}</span><span>${intent.name} · ${intentSuffix}</span>`;
+    $("intent").innerHTML = `<span class="intent-icon">${intentIcon}</span><span>${enemy.frozen ? "FROZEN · next action skipped" : `${intent.name} · ${intentSuffix}`}${enemy.poison ? ` · ❧ ${enemy.poison}` : ""}</span>`;
     const phase = state.phase;
-    const badge = phase === "resolving" ? "BATTLE IN MOTION" : phase === "reward" || phase === "won" ? "VICTORY" : phase === "lost" ? "EXPEDITION ENDED" : "YOUR TURN";
+    const badge = phase === "resolving" ? "BATTLE IN MOTION" : ["victory", "shop", "won"].includes(phase) ? "VICTORY" : phase === "lost" ? "EXPEDITION ENDED" : "YOUR TURN";
     $("battle-badge").innerHTML = `<span></span> ${badge}`;
     renderDice();
     const values = totals();
     ["attack", "guard", "mend"].forEach((action) => {
-      const assigned = state.dice.filter((die) => die.assignment === action);
-      $(`${action}-value`).textContent = values[action];
-      $(`${action}-dice`).textContent = assigned.length ? assigned.map((die) => die.value).join(" + ") + (action === "attack" && assigned.some((die) => die.value === 6) ? " · CRITICAL" : "") : "NO DICE";
-      $(`${action}-dice`).classList.toggle("has-dice", assigned.length > 0);
-      $(`assign-${action}`).disabled = phase !== "assign" || state.selected === null;
-      $(`assign-${action}`).classList.toggle("active", assigned.length > 0);
-      $(`assign-${action}`).setAttribute("aria-label", `${action}: ${values[action]} ${action === "guard" ? "block" : action === "mend" ? "healing" : "damage"}. Assign selected die.`);
+      const value = action === "attack" ? values.attack + values.pierce : values[action];
+      $(`${action}-value`).textContent = value;
+      $(`${action}-dice`).textContent = phase === "ready" ? "ROLL TO REVEAL" : action === "attack" && values.criticals ? `${values.criticals} CRITICAL ${values.criticals === 1 ? "DIE" : "DICE"}` : value ? "AUTOMATIC EFFECT" : "NO CONTRIBUTION";
+      $(`${action}-dice`).classList.toggle("has-dice", value > 0);
+      $(`summary-${action}`).classList.toggle("active", value > 0);
     });
-    const unassigned = state.dice.filter((die) => !die.assignment).length;
-    const allAssigned = state.dice.length === 3 && unassigned === 0;
-    $("main-button").disabled = phase !== "ready" && !(phase === "assign" && allAssigned);
-    $("main-button-text").textContent = phase === "ready" ? "Roll the dice" : phase === "rolling" ? "Rolling…" : phase === "resolving" ? "Fighting…" : phase === "assign" ? "Make your move" : "Battle complete";
-    $("reroll-button").disabled = phase !== "assign" || !state.rerolls || state.selected === null;
+    $("special-effects").innerHTML = `${values.pierce ? `<span>✦ ${values.pierce} piercing damage</span>` : ""}${values.poison ? `<span>❧ +${values.poison} poison</span>` : ""}${values.gold ? `<span>◈ +${values.gold} gold</span>` : ""}`;
+    $("main-button").disabled = !["ready", "rolled"].includes(phase);
+    $("reset-button").disabled = ["rolling", "resolving", "victory"].includes(phase);
+    $("main-button-text").textContent = phase === "ready" ? state.collection.length === 1 ? "Roll your die" : "Roll your dice" : phase === "rolling" ? "Rolling…" : phase === "resolving" ? "Fighting…" : phase === "rolled" ? "Make your move" : "Battle complete";
+    $("reroll-button").disabled = phase !== "rolled" || !state.rerolls || state.selected === null;
     $("reroll-button").innerHTML = `↻ Reroll selected <span>${state.rerolls} left</span>`;
-    $("dice-caption").textContent = phase === "assign" ? state.selected !== null ? `DIE ${state.selected + 1} SELECTED · CHOOSE AN ACTION` : "ALL DICE ASSIGNED · READY TO FIGHT" : phase === "rolling" ? "FATE IS DECIDING…" : "THREE DICE. ONE DESTINY.";
-    $("phase-title").textContent = phase === "ready" ? "Make your own luck." : phase === "assign" ? "Every die has a destiny." : phase === "rolling" ? "Let fortune fall." : phase === "resolving" ? "Your fate unfolds." : phase === "lost" ? "The dice will roll again." : "Fortune favors the brave.";
-    $("phase-instruction").textContent = phase === "assign" ? unassigned ? `Select a die, then choose an action. ${unassigned} ${unassigned === 1 ? "die" : "dice"} still to assign.` : "All dice assigned. Make your move, or select a die to change it." : phase === "ready" ? "Roll 3 dice, then assign them to attack, guard, or mend." : phase === "rolling" ? "A little courage. A little luck." : phase === "resolving" ? "You act first. The surviving monster strikes next." : "An expedition is only the beginning.";
-    const incoming = intent.kind === "guard" ? 0 : Math.max(0, intent.value - values.guard);
-    const outgoing = Math.max(0, values.attack - enemy.shield);
-    $("combat-preview").textContent = phase === "assign" ? `${outgoing} damage · ${Math.min(values.mend, state.maxHp - state.hp)} healing · ${outgoing >= enemy.hp ? "lethal — no counterattack!" : `${incoming} incoming damage`}` : "A roll of 6 on Attack adds +" + state.critBonus + " critical damage.";
+    $("dice-count").textContent = `${state.collection.length} / ${MAX_DICE}`;
+    $("dice-caption").textContent = phase === "rolled" ? "SELECT A DIE TO REROLL, OR MAKE YOUR MOVE" : phase === "rolling" ? "FATE IS DECIDING…" : "BUILD YOUR COLLECTION AT THE NEXT SHOP";
+    $("die-description").textContent = state.selected !== null ? `${diceTypes[state.dice[state.selected].type].name}: ${diceTypes[state.dice[state.selected].type].text}` : "Each die has its own effect. They all roll together.";
+    $("phase-title").textContent = phase === "ready" ? "Make your own luck." : phase === "rolled" ? "Your collection. Your destiny." : phase === "rolling" ? "Let fortune fall." : phase === "resolving" ? "Your fate unfolds." : phase === "lost" ? "The dice will roll again." : "Fortune favors the brave.";
+    $("phase-instruction").textContent = phase === "rolled" ? "Your dice effects are ready. Reroll one, cast an ability, or make your move." : phase === "ready" ? `Roll ${state.collection.length === 1 ? "your attack die" : `your ${state.collection.length} specialized dice`}. Earn gold to grow your collection.` : phase === "rolling" ? "A little courage. A little luck." : phase === "resolving" ? "Your dice act first. A surviving monster strikes next." : "An expedition is only the beginning.";
+    const incoming = intent.kind === "guard" || enemy.frozen ? 0 : Math.max(0, intent.value - values.guard);
+    const outgoing = Math.max(0, values.attack - enemy.shield) + values.pierce;
+    const poison = Math.min(12, enemy.poison + values.poison);
+    $("combat-preview").textContent = phase === "rolled" ? `${outgoing} damage${poison ? ` + ${poison} poison` : ""} · ${Math.min(values.mend, state.maxHp - state.hp)} healing · ${outgoing + poison >= enemy.hp ? "lethal — no counterattack!" : `${incoming} incoming damage`}` : "Each die keeps its own role. Attack sixes deal bonus damage.";
+    renderAbilities();
+    $("skill-list").innerHTML = Object.entries(state.skills).map(([key, level]) => `<span title="${skills[key].text}">${skills[key].icon} ${skills[key].name} ${level > 1 ? `×${level}` : ""}</span>`).join("");
   }
 
   function dieMarkup(value) {
@@ -394,8 +575,8 @@
   }
 
   function renderDice() {
-    const dice = state.dice.length ? state.dice : [{ value: 5 }, { value: 6 }, { value: 3 }];
-    $("dice-tray").innerHTML = dice.map((die, index) => `<button class="die${state.phase === "ready" ? " unrolled" : ""}${state.selected === index ? " selected" : ""}${state.phase === "rolling" && (state.rollingIndex === undefined || state.rollingIndex === index) ? " rolling" : ""}" data-index="${index}" data-value="${die.value}" aria-label="Die ${index + 1}: ${state.phase === "ready" ? "not rolled" : die.value}${die.assignment ? `, assigned to ${die.assignment}` : ""}" aria-pressed="${state.selected === index}"${state.phase !== "assign" ? " disabled" : ""}>${dieMarkup(die.value)}${die.assignment ? `<span class="die-assignment ${die.assignment}" aria-hidden="true">${icons[die.assignment]}</span>` : ""}</button>`).join("");
+    const dice = state.dice.length ? state.dice : state.collection.map((type) => ({ type, value: 6 }));
+    $("dice-tray").innerHTML = dice.map((die, index) => `<button class="die type-${die.type}${state.phase === "ready" ? " unrolled" : ""}${state.selected === index ? " selected" : ""}${state.phase === "rolling" && (state.rollingIndex === undefined || state.rollingIndex === index) ? " rolling" : ""}" data-index="${index}" data-type="${die.type}" data-value="${die.value}" title="${diceTypes[die.type].name}: ${diceTypes[die.type].text}" aria-label="${diceTypes[die.type].name} ${index + 1}: ${state.phase === "ready" ? "not rolled" : die.value}" aria-pressed="${state.selected === index}"${state.phase !== "rolled" ? " disabled" : ""}>${dieMarkup(die.value)}<span class="die-assignment ${die.type}" aria-hidden="true">${diceTypes[die.type].icon}</span><span class="die-type-label" aria-hidden="true">${diceTypes[die.type].label}</span></button>`).join("");
   }
 
   function log(message) {
@@ -409,33 +590,22 @@
   }
 
   function selectDie(index) {
-    if (state.phase !== "assign" || !state.dice[index]) return;
+    if (state.phase !== "rolled" || !state.dice[index]) return;
     state.selected = index;
     render();
     $("dice-tray").children[index].focus({ preventScroll: true });
     playSound("select");
   }
 
-  function assignDie(action) {
-    if (state.phase !== "assign" || state.selected === null) return;
-    state.dice[state.selected].assignment = action;
-    const next = state.dice.findIndex((die) => !die.assignment);
-    state.selected = next < 0 ? null : next;
-    render();
-    if (state.selected === null) $("main-button").focus({ preventScroll: true });
-    else $("dice-tray").children[state.selected].focus({ preventScroll: true });
-    playSound("select");
-  }
-
   async function rollDice(reroll = false) {
-    if (reroll ? state.phase !== "assign" || !state.rerolls || state.selected === null : state.phase !== "ready") return;
+    if (reroll ? state.phase !== "rolled" || !state.rerolls || state.selected === null : state.phase !== "ready") return;
+    const run = state.id;
     const index = reroll ? state.selected : undefined;
     if (reroll) {
       state.rerolls--;
-      state.dice[index].assignment = null;
     } else {
-      state.dice = Array.from({ length: 3 }, () => ({ value: 1, assignment: null }));
-      state.rerolls = 1;
+      state.dice = state.collection.map((type) => ({ type, value: 1 }));
+      state.rerolls = 1 + state.extraRerolls;
     }
     state.phase = "rolling";
     state.rollingIndex = index;
@@ -446,22 +616,24 @@
       state.dice.forEach((die, i) => { if (index === undefined || i === index) die.value = rollDie(); });
       renderDice();
       await wait(65 + frame * 5);
+      if (state.id !== run) return;
     }
-    state.stats.rolls += reroll ? 1 : 3;
-    state.phase = "assign";
+    state.stats.rolls += reroll ? 1 : state.dice.length;
+    state.phase = "rolled";
     state.selected = index === undefined ? 0 : index;
     delete state.rollingIndex;
     render();
     if ($("help-overlay").hidden) $("dice-tray").children[state.selected].focus({ preventScroll: true });
-    log(reroll ? `Fortune tried again: die ${index + 1} rolled a ${state.dice[index].value}.` : `You rolled ${state.dice.map((die) => die.value).join(", ")}. Choose their fate.`);
+    log(reroll ? `${diceTypes[state.dice[index].type].name} rerolled: ${state.dice[index].value}.` : `Your dice rolled ${state.dice.map((die) => die.value).join(", ")}. Their effects are ready.`);
   }
 
   function animate(id, className, duration = 550) {
     const element = $(id);
+    const run = state.id;
     element.classList.remove("strike", "enemy-strike", "hit");
     void element.offsetWidth;
     element.classList.add(className);
-    setTimeout(() => { element.classList.remove(className); }, reducedMotion ? 30 : duration);
+    setTimeout(() => { if (state.id === run) element.classList.remove(className); }, reducedMotion ? 30 : duration);
   }
 
   function floatNumber(target, value, kind = "", label = "") {
@@ -478,11 +650,16 @@
   }
 
   async function resolveTurn() {
-    if (state.phase !== "assign" || state.dice.length !== 3 || state.dice.some((die) => !die.assignment)) return;
+    if (state.phase !== "rolled" || state.dice.length !== state.collection.length) return;
+    const run = state.id;
     state.phase = "resolving";
     const values = totals();
     const intent = getIntent();
     const enemy = state.enemy;
+    if (values.gold) {
+      addGold(values.gold);
+      log(`Fortune dice earn ${values.gold} gold.`);
+    }
     render();
     if (values.mend) {
       const healed = Math.min(state.maxHp - state.hp, values.mend);
@@ -493,17 +670,19 @@
         log(`Your dice restore ${healed} health.`);
         render();
         await wait(550);
+        if (state.id !== run) return;
       }
     }
     if (values.guard) {
       $("ward-aura").classList.add("visible");
       playSound("block");
     }
-    if (values.attack) {
+    if (values.attack || values.pierce) {
       animate("hero-art", "strike");
       await wait(300);
+      if (state.id !== run) return;
       const blocked = Math.min(enemy.shield, values.attack);
-      const damage = Math.min(enemy.hp, values.attack - blocked);
+      const damage = Math.min(enemy.hp, values.attack - blocked + values.pierce);
       enemy.shield -= blocked;
       enemy.hp -= damage;
       state.stats.damage += damage;
@@ -512,24 +691,46 @@
       animate("enemy-art", "hit");
       animate("arena", "impact", 350);
       playSound("hit");
-      log(`${values.criticals ? "Critical strike! " : ""}You deal ${damage} damage${blocked ? ` (${blocked} absorbed by its shield)` : ""}.`);
+      log(`${values.criticals ? "Critical strike! " : ""}You deal ${damage} damage${blocked ? ` (${blocked} absorbed by its shield)` : ""}${values.pierce ? `, including ${values.pierce} piercing` : ""}.`);
       render();
       await wait(650);
+      if (state.id !== run) return;
+    }
+    if (values.poison) enemy.poison = Math.min(12, enemy.poison + values.poison);
+    if (enemy.hp > 0 && enemy.poison) {
+      const damage = Math.min(enemy.hp, enemy.poison);
+      enemy.hp -= damage;
+      state.stats.damage += damage;
+      enemy.poison = Math.max(0, enemy.poison - 1);
+      floatNumber("enemy", `−${damage}`, "heal", "POISON");
+      log(`Venom deals ${damage} damage through armor.`);
+      render();
+      await wait(500);
+      if (state.id !== run) return;
     }
     if (enemy.hp <= 0) {
       await victory();
       return;
     }
-    if (intent.kind === "guard") {
+    if (enemy.frozen) {
+      enemy.frozen = false;
+      floatNumber("enemy", "FROZEN", "block");
+      log(`${enemy.name} is frozen and cannot act.`);
+      render();
+      await wait(500);
+      if (state.id !== run) return;
+    } else if (intent.kind === "guard") {
       enemy.shield += intent.value;
       floatNumber("enemy", `+${intent.value}`, "block", "SHIELD");
       playSound("block");
       log(`${enemy.name} gains ${intent.value} shield. Break it with your next attack.`);
       render();
       await wait(750);
+      if (state.id !== run) return;
     } else {
       animate("enemy-art", "enemy-strike");
       await wait(300);
+      if (state.id !== run) return;
       const blocked = Math.min(values.guard, intent.value);
       const damage = Math.min(state.hp, Math.max(0, intent.value - values.guard));
       state.hp -= damage;
@@ -545,6 +746,7 @@
       log(`${enemy.name} uses ${intent.name}: ${damage} damage${blocked ? `, ${blocked} blocked` : ""}.`);
       render();
       await wait(650);
+      if (state.id !== run) return;
       if (intent.kind === "drain" && damage) {
         const healing = Math.min(enemy.maxHp - enemy.hp, Math.ceil(damage / 2));
         enemy.hp += healing;
@@ -553,6 +755,7 @@
           log(`${enemy.name} steals ${healing} health.`);
           render();
           await wait(500);
+          if (state.id !== run) return;
         }
       }
     }
@@ -563,6 +766,7 @@
       playSound("loss");
       render();
       await wait(650);
+      if (state.id !== run) return;
       showEnding(false);
       return;
     }
@@ -570,52 +774,172 @@
     state.phase = "ready";
     state.dice = [];
     state.selected = null;
-    state.rerolls = 1;
+    state.rerolls = 1 + state.extraRerolls;
     render();
     if ($("help-overlay").hidden) $("main-button").focus({ preventScroll: true });
   }
 
   async function victory() {
+    const run = state.id;
     state.defeated++;
-    state.phase = state.defeated === encounters.length ? "won" : "reward";
+    state.phase = state.defeated === RUN_LENGTH ? "won" : "victory";
+    const omen = currentOmen();
+    const gold = Math.ceil(state.enemy.gold * (1 + state.lootBonus)) + (omen.gold || 0);
+    addGold(gold);
+    const recovery = Math.min(state.maxHp - state.hp, 8 + state.recovery + (omen.recovery || 0));
+    state.hp += recovery;
     $("enemy-art").classList.add("defeated");
     $("ward-aura").classList.remove("visible");
     saveRecord();
     playSound("victory");
-    log(`${state.enemy.name} falls. Fortune favors the brave.`);
+    log(`${state.enemy.name} falls. +${gold} gold${recovery ? `, +${recovery} health` : ""}.`);
     render();
     await wait(900);
+    if (state.id !== run) return;
     if (state.phase === "won") {
       showEnding(true);
       return;
     }
-    const recovery = Math.min(state.maxHp - state.hp, 8 + state.recovery);
-    state.hp += recovery;
-    render();
-    state.rewards = [...blessings];
-    for (let i = state.rewards.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [state.rewards[i], state.rewards[j]] = [state.rewards[j], state.rewards[i]];
+    if (state.defeated % SHOP_INTERVAL === 0) {
+      openShop(gold, recovery);
+    } else {
+      state.encounter++;
+      loadEncounter();
+      notify(`Victory! +${gold} gold${recovery ? ` · +${recovery} HP` : ""} · Shop in ${SHOP_INTERVAL - state.defeated % SHOP_INTERVAL} victories.`);
+      if ($("help-overlay").hidden) $("main-button").focus({ preventScroll: true });
     }
-    state.rewards = state.rewards.slice(0, 3);
-    $("reward-description").textContent = `${state.enemy.name} defeated. ${recovery ? `You recovered ${recovery} health. ` : ""}${state.defeated % 3 === 0 ? "A new chapter awaits beyond the shadows." : "The path ahead grows darker. You grow stronger."}`;
-    $("reward-cards").innerHTML = state.rewards.map((reward, i) => `<button class="reward-card" data-reward="${i}"><span class="reward-icon" aria-hidden="true">${reward.icon}</span><h3>${reward.name}</h3><p>${reward.text}</p><span class="reward-tag">${reward.tag}</span></button>`).join("");
-    closeHelp(false);
-    $("reward-overlay").hidden = false;
-    $("reward-cards").firstElementChild.focus({ preventScroll: true });
   }
 
-  function chooseReward(index) {
-    if (state.phase !== "reward" || !state.rewards[index]) return;
-    const reward = state.rewards[index];
-    reward.apply();
-    state.rewards = [];
-    state.encounter++;
-    $("reward-overlay").hidden = true;
-    loadEncounter();
-    log(`${reward.name} received. ${state.enemy.name} blocks your path.`);
+  function makeStock() {
+    const types = ["attack", shuffle(["guard", "mend"])[0]];
+    types.push(...shuffle(Object.keys(diceTypes).filter((key) => !types.includes(key))).slice(0, 2));
+    const offers = [
+      ...types.map((key) => ({ kind: "dice", key })),
+      ...shuffle(Object.keys(abilities).filter((key) => !state.abilities.includes(key))).slice(0, 2).map((key) => ({ kind: "ability", key })),
+      ...shuffle(Object.keys(skills).filter((key) => (state.skills[key] || 0) < skills[key].max)).slice(0, 4).map((key) => ({ kind: "skill", key }))
+    ];
+    state.stock = offers.map((offer) => {
+      const item = itemDefinition(offer);
+      return { ...offer, price: Math.max(1, item.price + Math.floor(Math.random() * 5) - 2 + (offer.kind === "skill" ? (state.skills[offer.key] || 0) * 6 : 0)), bought: false };
+    });
+  }
+
+  function itemDefinition(offer) {
+    return (offer.kind === "dice" ? diceTypes : offer.kind === "ability" ? abilities : skills)[offer.key];
+  }
+
+  function offerUnavailable(offer) {
+    return offer.bought || (offer.kind === "dice" && state.collection.length >= MAX_DICE) ||
+      (offer.kind === "ability" && state.abilities.includes(offer.key)) ||
+      (offer.kind === "skill" && (state.skills[offer.key] || 0) >= skills[offer.key].max);
+  }
+
+  function openShop(gold, recovery) {
+    clearInfoToast();
+    state.phase = "shop";
+    state.shopFilter = "all";
+    state.refreshed = false;
+    makeStock();
+    closeHelp(false);
+    $("shop-description").textContent = `Five enemies defeated. ${state.enemy.name} dropped ${gold} gold${recovery ? ` and you recovered ${recovery} health` : ""}. A new chapter lies ahead. Spend your spoils wisely.`;
+    $("shop-overlay").hidden = false;
+    render();
+    renderShop();
+    $("shop-overlay").querySelector(".shop-modal").scrollTop = 0;
+    $("leave-shop").focus({ preventScroll: true });
+  }
+
+  function renderShop() {
+    $("shop-purse").innerHTML = `◈ <b>${state.gold}</b><small>GOLD TO SPEND</small>`;
+    const levels = Object.values(state.skills).reduce((a, b) => a + b, 0);
+    $("shop-status").textContent = `♡ ${state.hp} / ${state.maxHp} HP · ${state.collection.length} / ${MAX_DICE} dice · ${state.abilities.length} ${state.abilities.length === 1 ? "ability" : "abilities"} · ${levels} skill ${levels === 1 ? "level" : "levels"}`;
+    $("shop-tabs").querySelectorAll("button").forEach((button) => button.setAttribute("aria-pressed", String(button.dataset.filter === state.shopFilter)));
+    const visible = state.stock.map((offer, index) => ({ offer, index })).filter(({ offer }) => state.shopFilter === "all" || offer.kind === state.shopFilter);
+    $("shop-stock").innerHTML = visible.length ? visible.map(({ offer, index }) => {
+      const item = itemDefinition(offer);
+      const unavailable = offerUnavailable(offer);
+      const owned = offer.kind === "dice" ? state.collection.filter((type) => type === offer.key).length : offer.kind === "skill" ? state.skills[offer.key] || 0 : state.abilities.includes(offer.key) ? 1 : 0;
+      const status = offer.bought ? "PURCHASED" : unavailable ? offer.kind === "dice" ? "COLLECTION FULL" : "MAXED / OWNED" : state.gold < offer.price ? "NEED MORE GOLD" : `BUY · ◈ ${offer.price}`;
+      return `<button class="shop-card ${offer.kind === "dice" ? `type-${offer.key}` : ""}${offer.bought ? " purchased" : ""}" data-offer="${index}"${unavailable || state.gold < offer.price ? " disabled" : ""}><span class="shop-card-icon">${item.icon}</span><span class="shop-card-kind">${offer.kind === "dice" ? "SPECIALIZED DIE" : offer.kind === "ability" ? "ACTIVE ABILITY · ONCE / BATTLE" : "PERMANENT SKILL"}${owned ? ` · OWNED ${owned}` : ""}</span><h3>${item.name}</h3><p>${item.text}</p><span class="shop-price">${status}${!unavailable && state.gold < offer.price ? ` · ◈ ${offer.price}` : ""}</span></button>`;
+    }).join("") : '<p class="empty-stock">You already know all the abilities on offer. Browse dice or skills.</p>';
+    $("refresh-shop").disabled = state.refreshed || state.gold < 5;
+    $("refresh-shop").textContent = state.refreshed ? "↻ Stock refreshed" : "↻ New stock · 5 gold";
+    $("shop-rest").disabled = state.gold < 8 || state.hp === state.maxHp;
+  }
+
+  function buyOffer(index) {
+    const offer = state.stock[index];
+    if (state.phase !== "shop" || !offer) return;
+    if (offerUnavailable(offer) || state.gold < offer.price) {
+      notify("That purchase is unavailable. Check your gold and collection limit.");
+      return;
+    }
+    state.gold -= offer.price;
+    offer.bought = true;
+    if (offer.kind === "dice") state.collection.push(offer.key);
+    else if (offer.kind === "ability") state.abilities.push(offer.key);
+    else {
+      state.skills[offer.key] = (state.skills[offer.key] || 0) + 1;
+      skills[offer.key].apply();
+    }
+    log(`${itemDefinition(offer).name} purchased for ${offer.price} gold.`);
     playSound("heal");
+    render();
+    renderShop();
+    $("leave-shop").focus({ preventScroll: true });
+  }
+
+  function leaveShop() {
+    if (state.phase !== "shop") return;
+    $("shop-overlay").hidden = true;
+    state.encounter++;
+    loadEncounter();
+    log(`A new chapter. ${state.collection.length} dice at your side.`);
     $("main-button").focus({ preventScroll: true });
+  }
+
+  function renderAbilities() {
+    $("ability-bar").innerHTML = state.abilities.length ? state.abilities.map((key) => {
+      const used = state.usedAbilities.has(key);
+      const disabled = used || !["ready", "rolled"].includes(state.phase) || (key === "salve" && state.hp === state.maxHp);
+      return `<button class="ability-button" data-ability="${key}" title="${abilities[key].text}"${disabled ? " disabled" : ""}><span>${abilities[key].icon}</span><strong>${abilities[key].name}</strong><small>${used ? "USED" : key === "salve" && state.hp === state.maxHp ? "FULL HP" : "READY"}</small></button>`;
+    }).join("") : '<p class="empty-abilities">Buy abilities at the shop after five victories. Each refreshes every battle.</p>';
+  }
+
+  async function castAbility(key) {
+    if (!state.abilities.includes(key) || state.usedAbilities.has(key) || !["ready", "rolled"].includes(state.phase)) return;
+    if (key === "salve" && state.hp === state.maxHp) return;
+    const run = state.id;
+    const previousPhase = state.phase;
+    state.usedAbilities.add(key);
+    state.phase = "resolving";
+    if (key === "fireball") {
+      const damage = Math.min(10, state.enemy.hp);
+      state.enemy.hp -= damage;
+      state.stats.damage += damage;
+      floatNumber("enemy", `−${damage}`, "critical", "EMBER BOLT");
+      animate("enemy-art", "hit");
+      playSound("hit");
+      log(`Ember Bolt deals ${damage} damage through shields.`);
+    } else if (key === "salve") {
+      const healing = Math.min(14, state.maxHp - state.hp);
+      state.hp += healing;
+      floatNumber("hero", `+${healing}`, "heal");
+      playSound("heal");
+      log(`Healing Spring restores ${healing} health.`);
+    } else {
+      state.enemy.frozen = true;
+      floatNumber("enemy", "FROZEN", "block");
+      playSound("block");
+      log("Frost Seal freezes the enemy's next action.");
+    }
+    render();
+    await wait(600);
+    if (state.id !== run) return;
+    if (state.enemy.hp <= 0) { await victory(); return; }
+    state.phase = previousPhase;
+    render();
+    if ($("help-overlay").hidden) $("main-button").focus({ preventScroll: true });
   }
 
   function showEnding(won) {
@@ -623,16 +947,16 @@
     $("end-emblem").textContent = won ? "♛" : "◇";
     $("end-eyebrow").textContent = won ? "THE DARKNESS HAS FALLEN" : "THE END OF AN EXPEDITION";
     $("end-title").textContent = won ? "You defied the darkness." : "Not all luck lasts.";
-    $("end-description").textContent = won ? "The Last Flame is extinguished. From the wilds to the ember throne, your courage shaped your fortune. The realm remembers." : `${state.enemy.name} ended this adventure. You defeated ${state.defeated} of 9 monsters. Every expedition teaches you something. Every roll is a new beginning.`;
+    $("end-description").textContent = won ? `All fifteen enemies defeated. Your ${state.collection.length}-dice collection overcame the final guardian. Another path, another shop, and another build await in your next run.` : `${state.enemy.name} ended this adventure. You defeated ${state.defeated} of ${RUN_LENGTH} monsters. New enemies, omens, and merchant stock await your next run.`;
     $("run-stats").innerHTML = [
-      [state.defeated, "MONSTERS SLAIN"], [state.stats.damage, "DAMAGE DEALT"], [state.stats.criticals, "CRITICAL DICE"]
+      [state.defeated, "MONSTERS SLAIN"], [state.stats.damage, "DAMAGE DEALT"], [state.stats.earned, "GOLD EARNED"]
     ].map(([value, label]) => `<div class="run-stat"><strong>${value}</strong><span>${label}</span></div>`).join("");
     $("end-overlay").hidden = false;
     $("restart-button").focus({ preventScroll: true });
   }
 
   function openHelp() {
-    if (!$("reward-overlay").hidden || !$("end-overlay").hidden) return;
+    if (!$("shop-overlay").hidden || !$("end-overlay").hidden || !$("reset-overlay").hidden) return;
     helpReturnFocus = document.activeElement;
     $("help-overlay").hidden = false;
     $("close-help").focus({ preventScroll: true });
@@ -647,21 +971,72 @@
     }
   }
 
+  function openReset() {
+    if (["rolling", "resolving", "victory"].includes(state.phase)) return;
+    closeHelp(false);
+    resetReturnFocus = document.activeElement;
+    $("reset-overlay").hidden = false;
+    $("cancel-reset").focus({ preventScroll: true });
+  }
+
+  function cancelReset() {
+    $("reset-overlay").hidden = true;
+    if (resetReturnFocus?.isConnected && !resetReturnFocus.disabled) resetReturnFocus.focus({ preventScroll: true });
+    else $("reset-button").focus({ preventScroll: true });
+  }
+
   $("main-button").addEventListener("click", () => {
     if (state.phase === "ready") void rollDice();
-    else if (state.phase === "assign") void resolveTurn();
+    else if (state.phase === "rolled") void resolveTurn();
   });
   $("reroll-button").addEventListener("click", () => { void rollDice(true); });
   $("dice-tray").addEventListener("click", (event) => {
     const die = event.target.closest(".die");
     if (die) selectDie(Number(die.dataset.index));
   });
-  ["attack", "guard", "mend"].forEach((action) => {
-    $(`assign-${action}`).addEventListener("click", () => assignDie(action));
+  $("ability-bar").addEventListener("click", (event) => {
+    const button = event.target.closest("[data-ability]");
+    if (button) void castAbility(button.dataset.ability);
   });
-  $("reward-cards").addEventListener("click", (event) => {
-    const card = event.target.closest("[data-reward]");
-    if (card) chooseReward(Number(card.dataset.reward));
+  $("shop-stock").addEventListener("click", (event) => {
+    const card = event.target.closest("[data-offer]");
+    if (card) buyOffer(Number(card.dataset.offer));
+  });
+  $("shop-tabs").addEventListener("click", (event) => {
+    const button = event.target.closest("[data-filter]");
+    if (!button || state.phase !== "shop") return;
+    state.shopFilter = button.dataset.filter;
+    renderShop();
+    button.focus({ preventScroll: true });
+  });
+  $("refresh-shop").addEventListener("click", () => {
+    if (state.phase !== "shop" || state.refreshed || state.gold < 5) return;
+    state.gold -= 5;
+    state.refreshed = true;
+    makeStock();
+    render();
+    renderShop();
+    $("leave-shop").focus({ preventScroll: true });
+    playSound("roll");
+  });
+  $("shop-rest").addEventListener("click", () => {
+    if (state.phase !== "shop" || state.gold < 8 || state.hp === state.maxHp) return;
+    const healing = Math.min(12, state.maxHp - state.hp);
+    state.gold -= 8;
+    state.hp += healing;
+    render();
+    renderShop();
+    $("leave-shop").focus({ preventScroll: true });
+    playSound("heal");
+    log(`Merchant tonic restores ${healing} health for 8 gold.`);
+  });
+  $("leave-shop").addEventListener("click", leaveShop);
+  $("reset-button").addEventListener("click", openReset);
+  $("shop-reset").addEventListener("click", openReset);
+  $("cancel-reset").addEventListener("click", cancelReset);
+  $("confirm-reset").addEventListener("click", () => {
+    startRun();
+    $("main-button").focus({ preventScroll: true });
   });
   $("restart-button").addEventListener("click", () => {
     startRun();
@@ -679,14 +1054,18 @@
     if (event.target === $("help-overlay")) closeHelp();
   });
   document.addEventListener("keydown", (event) => {
-    const overlay = ["help-overlay", "reward-overlay", "end-overlay"].map($).find((element) => !element.hidden);
+    const overlay = ["reset-overlay", "help-overlay", "shop-overlay", "end-overlay"].map($).find((element) => !element.hidden);
     if (overlay) {
       if (event.key === "Escape" && overlay.id === "help-overlay") {
         event.preventDefault();
         closeHelp();
       }
+      if (event.key === "Escape" && overlay.id === "reset-overlay") {
+        event.preventDefault();
+        cancelReset();
+      }
       if (event.key === "Tab") {
-        const buttons = [...overlay.querySelectorAll("button:not(:disabled)")];
+        const buttons = [...overlay.querySelectorAll("button:not(:disabled)")].filter((button) => button.getClientRects().length);
         const first = buttons[0];
         const last = buttons[buttons.length - 1];
         if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
@@ -696,19 +1075,16 @@
     }
     if (event.repeat || event.ctrlKey || event.metaKey || event.altKey) return;
     const key = event.key.toLowerCase();
-    if (["1", "2", "3"].includes(key) && state.phase === "assign") {
+    if (["1", "2", "3", "4", "5", "6"].includes(key) && state.phase === "rolled") {
       event.preventDefault();
       selectDie(Number(key) - 1);
-    } else if (["a", "g", "m"].includes(key) && state.phase === "assign") {
-      event.preventDefault();
-      assignDie({ a: "attack", g: "guard", m: "mend" }[key]);
-    } else if (key === "r" && state.phase === "assign") {
+    } else if (key === "r" && state.phase === "rolled") {
       event.preventDefault();
       void rollDice(true);
     } else if (key === " " && (event.target === document.body || event.target === $("main-button") || event.target.closest(".die"))) {
       event.preventDefault();
       if (state.phase === "ready") void rollDice();
-      else if (state.phase === "assign") void resolveTurn();
+      else if (state.phase === "rolled") void resolveTurn();
     }
   });
 
