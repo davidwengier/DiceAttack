@@ -7,8 +7,8 @@
   <meta name="description" content="Roll the dice. Defy the darkness. A turn-based dungeon adventure by Max.">
   <title>Dice Attack — Roll against the darkness</title>
   <link rel="icon" href="favicon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="style.css?v=2">
-  <script src="game.js?v=2" defer></script>
+  <link rel="stylesheet" href="style.css?v=3">
+  <script src="game.js?v=3" defer></script>
 </head>
 <body>
   <noscript><p style="padding: 24px; text-align: center;">Dice Attack needs JavaScript to roll the dice. Enable JavaScript in your browser to play.</p></noscript>
@@ -112,7 +112,7 @@
       </div>
       <div class="shop-stock" id="shop-stock"></div>
       <div class="shop-utilities"><button class="secondary-button" id="refresh-shop">↻ New stock · 5 gold</button><button class="secondary-button" id="shop-rest">✚ Restore 12 HP · 8 gold</button></div>
-      <div class="shop-footer"><button class="reset-button" id="shop-reset">↻ Reset run</button><p>Purchases last this run.<br>Build a collection of up to 6 dice.</p><button class="primary-button" id="leave-shop">Venture onward <span class="button-arrow">↗</span></button></div>
+      <div class="shop-footer"><button class="reset-button" id="shop-reset">↻ Reset run</button><p>Buy multiple copies of any die.<br>Base · Gold +2 · Diamond +4. Up to 6 dice.</p><button class="primary-button" id="leave-shop">Venture onward <span class="button-arrow">↗</span></button></div>
     </section>
   </div>
   <div class="overlay" id="reset-overlay" hidden>
@@ -139,11 +139,12 @@
       <p class="eyebrow">A LITTLE KNOWLEDGE. A LITTLE LUCK.</p>
       <h2 id="help-title">How to defy the darkness.</h2>
       <div class="help-steps">
-        <p><b>01 <strong>One die. Endless possibilities.</strong></b> Start with one Attack die. Roll your whole collection each turn; each die automatically performs its own effect. Select a rolled die to reroll it. You get one reroll each turn, or two with the Lucky Fingers skill.</p>
+        <p><b>01 <strong>One die. Endless possibilities.</strong></b> Start with one Base Attack die. Roll your whole collection each turn; each die automatically performs its own effect. Duplicate dice each roll separately. Select a rolled die to reroll it. You get one reroll each turn, or two with the Lucky Fingers skill.</p>
         <p><b>02 <strong>Build your collection.</strong></b> Attack dice deal their value as damage, with +3 on a six. Guard dice block their value for this turn; Heal dice restore their value. Venom adds poison, Flame ignores shields, Blood attacks and heals, and Fortune earns gold and blocks half its roll. Hover or select a die to read its exact effect.</p>
-        <p><b>03 <strong>Spend your spoils.</strong></b> Every kill earns gold and restores 8 health. The shop appears after every five enemies, before the next chapter. Spend your saved gold on up to six dice, reusable abilities, and permanent skills. Abilities are free to cast once per battle; skills improve your entire run. You can also buy healing or refresh the stock once per shop.</p>
-        <p><b>04 <strong>Read your enemy.</strong></b> You heal and attack first, poison then ticks, and surviving monsters act. Shields block normal damage, not Flame or poison. Poison stacks up to 12 and loses 1 strength each turn. Monsters gain +1 damage every three turns. Frost Seal skips their next action.</p>
-        <p><b>05 <strong>No two paths alike.</strong></b> Each run draws fifteen encounters, three bosses, chapter omens, and merchant stock at random. Omens give a bonus for their chapter. Shops await after enemies 5 and 10; defeating the final boss ends the run. Reset at any time between actions to start a fresh run.</p>
+        <p><b>03 <strong>Choose your dice variants.</strong></b> Every dice type comes in Base, Gold, and Diamond. Base uses the rolled value. Gold adds +2 and Diamond adds +4 before calculating the die's effects, including half-roll effects. Only a natural six triggers an Attack critical. Higher variants cost more gold.</p>
+        <p><b>04 <strong>Spend your spoils.</strong></b> Every kill earns gold and restores 8 health. The shop appears after every five enemies, before the next chapter. Buy multiple copies of the same die or variant without refreshing the shop, up to six dice total. Each purchase charges its displayed price. Abilities are free to cast once per battle; skills improve your entire run. You can also buy healing or refresh the stock once per shop.</p>
+        <p><b>05 <strong>Read your enemy.</strong></b> You heal and attack first, poison then ticks, and surviving monsters act. Shields block normal damage, not Flame or poison. Poison stacks up to 12 and loses 1 strength each turn. Monsters gain +1 damage every three turns. Frost Seal skips their next action.</p>
+        <p><b>06 <strong>No two paths alike.</strong></b> Each run draws fifteen encounters, three bosses, chapter omens, and merchant stock at random. Omens give a bonus for their chapter. Shops await after enemies 5 and 10; defeating the final boss ends the run. Reset at any time between actions to start a fresh run.</p>
       </div>
       <p class="modal-footnote">Keyboard: 1–6 select dice · R reroll · Space roll / fight · Escape close instructions / cancel reset</p>
       <button class="primary-button" id="help-play-button">Let fate decide <span class="button-arrow">↗</span></button>
