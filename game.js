@@ -9,16 +9,22 @@
   const diceTiers = {
     base: { name: "Base", icon: "◇", bonus: 0, priceMultiplier: 1 },
     gold: { name: "Gold", icon: "✦", bonus: 2, priceMultiplier: 1.8 },
-    diamond: { name: "Diamond", icon: "♦", bonus: 4, priceMultiplier: 2.8 }
+    diamond: { name: "Diamond", icon: "♦", bonus: 4, priceMultiplier: 2.8 },
+    ruby: { name: "Ruby", icon: "◆", bonus: 6, priceMultiplier: 3.8 },
+    emerald: { name: "Emerald", icon: "⬡", bonus: 8, priceMultiplier: 5 },
+    obsidian: { name: "Obsidian", icon: "✧", bonus: 10, priceMultiplier: 6.5 }
   };
   const diceTypes = {
-    attack: { name: "Attack Die", label: "ATTACK", icon: "⚔", price: 18, text: "Deal your roll as damage. Sixes add +3 critical damage, improved by Loaded Fate." },
+    attack: { name: "Attack Die", label: "ATTACK", icon: "⚔", price: 18, offensive: true, text: "Deal your roll as damage. Sixes add +3 critical damage, improved by Loaded Fate." },
     guard: { name: "Guard Die", label: "GUARD", icon: "⬡", price: 14, text: "Block your roll's worth of damage this turn. Moonward adds +1 per level." },
     mend: { name: "Heal Die", label: "HEAL", icon: "✚", price: 16, text: "Restore your roll's worth of health. Lifebloom adds +1 per level." },
-    venom: { name: "Venom Die", label: "VENOM", icon: "❧", price: 22, text: "Add half your roll, rounded up, as poison. Poison bypasses shields and ticks before the enemy acts." },
-    flame: { name: "Flame Die", label: "FLAME", icon: "✦", price: 26, text: "Deal your roll +2 damage, ignoring shields. Ember Edge also increases this damage." },
-    blood: { name: "Blood Die", label: "BLOOD", icon: "♡", price: 28, text: "Deal your roll as damage and restore half your roll, rounded up. Attack and healing skills both help." },
-    fortune: { name: "Fortune Die", label: "FORTUNE", icon: "◈", price: 18, text: "Earn your roll in gold and block half your roll, rounded up. Moonward improves the block." }
+    venom: { name: "Venom Die", label: "VENOM", icon: "❧", price: 22, offensive: true, text: "Add half your roll, rounded up, as poison. Poison bypasses shields and ticks before the enemy acts." },
+    flame: { name: "Flame Die", label: "FLAME", icon: "✦", price: 26, offensive: true, text: "Deal your roll +2 damage, ignoring shields. Ember Edge also increases this damage." },
+    blood: { name: "Blood Die", label: "BLOOD", icon: "♡", price: 28, offensive: true, text: "Deal your roll as damage and restore half your roll, rounded up. Attack and healing skills both help." },
+    fortune: { name: "Fortune Die", label: "FORTUNE", icon: "◈", price: 18, text: "Earn your roll in gold and block half your roll, rounded up. Moonward improves the block." },
+    frost: { name: "Frost Die", label: "FROST", icon: "❄", price: 28, offensive: true, text: "Deal half your roll, rounded up, as piercing damage. Reduce the enemy's damage by that half-roll this turn. Ember Edge improves your damage." },
+    lightning: { name: "Lightning Die", label: "LIGHTNING", icon: "ϟ", price: 30, offensive: true, text: "Deal your roll as damage. Natural rolls of 5 or 6 strike twice! Ember Edge applies to each strike." },
+    bloom: { name: "Bloom Die", label: "BLOOM", icon: "❀", price: 24, text: "Heal half your roll, rounded up, and block half, rounded down. Both healing and guard skills improve it." }
   };
   const abilities = {
     fireball: { name: "Ember Bolt", icon: "✦", price: 24, text: "Deal 10 damage ignoring shields. One free cast per battle." },
@@ -26,9 +32,9 @@
     freeze: { name: "Frost Seal", icon: "❄", price: 26, text: "Freeze the enemy, skipping its next action. One free cast per battle." }
   };
   const skills = {
-    power: { name: "Ember Edge", icon: "⚔", price: 14, max: 3, text: "+1 damage per Attack, Blood, and Flame die.", apply: () => { state.power++; } },
-    ward: { name: "Moonward", icon: "⬡", price: 12, max: 3, text: "+1 block per Guard and Fortune die.", apply: () => { state.ward++; } },
-    healing: { name: "Lifebloom", icon: "✚", price: 12, max: 3, text: "+1 healing per Heal and Blood die.", apply: () => { state.healing++; } },
+    power: { name: "Ember Edge", icon: "⚔", price: 14, max: 3, text: "+1 damage per Attack, Blood, Flame, Frost, and Lightning strike.", apply: () => { state.power++; } },
+    ward: { name: "Moonward", icon: "⬡", price: 12, max: 3, text: "+1 block per Guard, Fortune, and Bloom die.", apply: () => { state.ward++; } },
+    healing: { name: "Lifebloom", icon: "✚", price: 12, max: 3, text: "+1 healing per Heal, Blood, and Bloom die.", apply: () => { state.healing++; } },
     vitality: { name: "Lionheart", icon: "♡", price: 16, max: 3, text: "+8 maximum health and restore 8 health now.", apply: () => { state.maxHp += 8; state.hp = Math.min(state.maxHp, state.hp + 8); } },
     critical: { name: "Loaded Fate", icon: "✦", price: 14, max: 3, text: "+2 extra damage on Attack rolls of six.", apply: () => { state.critBonus += 2; } },
     recovery: { name: "Second Wind", icon: "❧", price: 16, max: 3, text: "Recover 4 extra health after each victory. Heal 4 now.", apply: () => { state.recovery += 4; state.hp = Math.min(state.maxHp, state.hp + 4); } },
@@ -72,9 +78,9 @@
   ];
   const omens = [
     { name: "Gilded Skies", text: "+4 gold from every kill", gold: 4 },
-    { name: "Lifebloom Mist", text: "+1 healing from Heal and Blood dice", healing: 1 },
-    { name: "Iron Moon", text: "+1 block from Guard and Fortune dice", ward: 1 },
-    { name: "Ember Stars", text: "+1 damage from Attack, Blood, and Flame dice", power: 1 },
+    { name: "Lifebloom Mist", text: "+1 healing from Heal, Blood, and Bloom dice", healing: 1 },
+    { name: "Iron Moon", text: "+1 block from Guard, Fortune, and Bloom dice", ward: 1 },
+    { name: "Ember Stars", text: "+1 damage from Attack, Blood, Flame, Frost, and Lightning strikes", power: 1 },
     { name: "Lucky Constellation", text: "+2 critical damage on Attack sixes", critical: 2 },
     { name: "Gentle Rain", text: "+4 health recovered after each victory", recovery: 4 }
   ];
@@ -445,11 +451,11 @@
       encounters: generateRun(), omens: shuffle(omens).slice(0, 3),
       phase: "ready", encounter: 0, defeated: 0, turn: 1, gold: 0,
       hp: 40, maxHp: 40, power: 0, ward: 0, healing: 0, critBonus: 3, recovery: 0,
-      extraRerolls: 0, lootBonus: 0, collection: [{ type: "attack", tier: "base" }], dice: [],
+      extraRerolls: 0, lootBonus: 0, collection: [{ id: 1, type: "attack", tier: "base", paidPrice: 0 }], nextDieId: 2, pendingSale: null, dice: [],
       selected: null, rerolls: 1, enemy: null, abilities: [], usedAbilities: new Set(), skills: {},
-      stats: { rolls: 0, damage: 0, criticals: 0, earned: 0 }, stock: [], shopFilter: "all", refreshed: false
+      stats: { rolls: 0, damage: 0, criticals: 0, earned: 0 }, stock: [], shopFilter: "all", refreshed: false, expandedOffers: new Set()
     };
-    ["shop-overlay", "end-overlay", "reset-overlay", "help-overlay"].forEach((id) => { $(id).hidden = true; });
+    ["shop-overlay", "sell-overlay", "end-overlay", "reset-overlay", "help-overlay"].forEach((id) => { $(id).hidden = true; });
     $("hero-art").className = "character-art";
     $("hero-art").innerHTML = heroArtwork();
     $("hero-effects").replaceChildren();
@@ -495,7 +501,7 @@
   }
 
   function totals() {
-    const result = { attack: 0, guard: 0, mend: 0, criticals: 0, pierce: 0, poison: 0, gold: 0 };
+    const result = { attack: 0, guard: 0, mend: 0, criticals: 0, pierce: 0, poison: 0, gold: 0, chill: 0, chains: 0 };
     const omen = currentOmen();
     const power = state.power + (omen.power || 0);
     const ward = state.ward + (omen.ward || 0);
@@ -511,6 +517,12 @@
       else if (die.type === "venom") result.poison += Math.ceil(value / 2);
       else if (die.type === "blood") { result.attack += value + power; result.mend += Math.ceil(value / 2) + healing; }
       else if (die.type === "fortune") { result.gold += value; result.guard += Math.ceil(value / 2) + ward; }
+      else if (die.type === "frost") { result.pierce += Math.ceil(value / 2) + power; result.chill += Math.ceil(value / 2); }
+      else if (die.type === "lightning") {
+        const strikes = die.value >= 5 ? 2 : 1;
+        result.attack += (value + power) * strikes;
+        if (strikes === 2) result.chains++;
+      } else if (die.type === "bloom") { result.mend += Math.ceil(value / 2) + healing; result.guard += Math.floor(value / 2) + ward; }
     });
     return result;
   }
@@ -557,7 +569,7 @@
       $(`${action}-dice`).classList.toggle("has-dice", value > 0);
       $(`summary-${action}`).classList.toggle("active", value > 0);
     });
-    $("special-effects").innerHTML = `${values.pierce ? `<span>✦ ${values.pierce} piercing damage</span>` : ""}${values.poison ? `<span>❧ +${values.poison} poison</span>` : ""}${values.gold ? `<span>◈ +${values.gold} gold</span>` : ""}`;
+    $("special-effects").innerHTML = `${values.pierce ? `<span>✦ ${values.pierce} piercing damage</span>` : ""}${values.poison ? `<span>❧ +${values.poison} poison</span>` : ""}${values.gold ? `<span>◈ +${values.gold} gold</span>` : ""}${values.chill ? `<span>❄ −${values.chill} enemy damage</span>` : ""}${values.chains ? `<span>ϟ ${values.chains} double ${values.chains === 1 ? "strike" : "strikes"}</span>` : ""}`;
     $("main-button").disabled = !["ready", "rolled"].includes(phase);
     $("reset-button").disabled = ["rolling", "resolving", "victory"].includes(phase);
     $("main-button-text").textContent = phase === "ready" ? state.collection.length === 1 ? "Roll your die" : "Roll your dice" : phase === "rolling" ? "Rolling…" : phase === "resolving" ? "Fighting…" : phase === "rolled" ? "Make your move" : "Battle complete";
@@ -565,10 +577,10 @@
     $("reroll-button").innerHTML = `↻ Reroll selected <span>${state.rerolls} left</span>`;
     $("dice-count").textContent = `${state.collection.length} / ${MAX_DICE}`;
     $("dice-caption").textContent = phase === "rolled" ? "SELECT A DIE TO REROLL, OR MAKE YOUR MOVE" : phase === "rolling" ? "FATE IS DECIDING…" : "BUILD YOUR COLLECTION AT THE NEXT SHOP";
-    $("die-description").textContent = state.selected !== null ? dieDescription(state.dice[state.selected]) : "Base · Gold +2 · Diamond +4. Each die keeps its own effect.";
+    $("die-description").textContent = state.selected !== null ? dieDescription(state.dice[state.selected]) : "Six materials, ten effects. Find rare dice and sell old ones at the shop.";
     $("phase-title").textContent = phase === "ready" ? "Make your own luck." : phase === "rolled" ? "Your collection. Your destiny." : phase === "rolling" ? "Let fortune fall." : phase === "resolving" ? "Your fate unfolds." : phase === "lost" ? "The dice will roll again." : "Fortune favors the brave.";
-    $("phase-instruction").textContent = phase === "rolled" ? "Your dice effects are ready. Reroll one, cast an ability, or make your move." : phase === "ready" ? `Roll ${state.collection.length === 1 ? "your attack die" : `your ${state.collection.length} specialized dice`}. Earn gold to grow your collection.` : phase === "rolling" ? "A little courage. A little luck." : phase === "resolving" ? "Your dice act first. A surviving monster strikes next." : "An expedition is only the beginning.";
-    const incoming = intent.kind === "guard" || enemy.frozen ? 0 : Math.max(0, intent.value - values.guard);
+    $("phase-instruction").textContent = phase === "rolled" ? "Your dice effects are ready. Reroll one, cast an ability, or make your move." : phase === "ready" ? `Roll ${state.collection.length === 1 ? "your die" : `your ${state.collection.length} specialized dice`}. Earn gold to grow your collection.` : phase === "rolling" ? "A little courage. A little luck." : phase === "resolving" ? "Your dice act first. A surviving monster strikes next." : "An expedition is only the beginning.";
+    const incoming = intent.kind === "guard" || enemy.frozen ? 0 : Math.max(0, intent.value - values.chill - values.guard);
     const outgoing = Math.max(0, values.attack - enemy.shield) + values.pierce;
     const poison = Math.min(12, enemy.poison + values.poison);
     $("combat-preview").textContent = phase === "rolled" ? `${outgoing} damage${poison ? ` + ${poison} poison` : ""} · ${Math.min(values.mend, state.maxHp - state.hp)} healing · ${outgoing + poison >= enemy.hp ? "lethal — no counterattack!" : `${incoming} incoming damage`}` : "Each die keeps its own role. Attack sixes deal bonus damage.";
@@ -695,6 +707,9 @@
       $("ward-aura").classList.add("visible");
       playSound("block");
     }
+    if (values.chill && intent.kind !== "guard" && !enemy.frozen) {
+      log(`Frost reduces the enemy's next strike by ${Math.min(values.chill, intent.value)} damage this turn.`);
+    }
     if (values.attack || values.pierce) {
       animate("hero-art", "strike");
       await wait(300);
@@ -709,7 +724,7 @@
       animate("enemy-art", "hit");
       animate("arena", "impact", 350);
       playSound("hit");
-      log(`${values.criticals ? "Critical strike! " : ""}You deal ${damage} damage${blocked ? ` (${blocked} absorbed by its shield)` : ""}${values.pierce ? `, including ${values.pierce} piercing` : ""}.`);
+      log(`${values.criticals ? "Critical strike! " : ""}${values.chains ? "Lightning strikes twice! " : ""}You deal ${damage} damage${blocked ? ` (${blocked} absorbed by its shield)` : ""}${values.pierce ? `, including ${values.pierce} piercing` : ""}.`);
       render();
       await wait(650);
       if (state.id !== run) return;
@@ -749,8 +764,9 @@
       animate("enemy-art", "enemy-strike");
       await wait(300);
       if (state.id !== run) return;
-      const blocked = Math.min(values.guard, intent.value);
-      const damage = Math.min(state.hp, Math.max(0, intent.value - values.guard));
+      const weakened = Math.max(0, intent.value - values.chill);
+      const blocked = Math.min(values.guard, weakened);
+      const damage = Math.min(state.hp, Math.max(0, weakened - values.guard));
       state.hp -= damage;
       if (damage) {
         floatNumber("hero", `−${damage}`);
@@ -761,7 +777,7 @@
         floatNumber("hero", "BLOCK", "block", "GUARDED");
         playSound("block");
       }
-      log(`${enemy.name} uses ${intent.name}: ${damage} damage${blocked ? `, ${blocked} blocked` : ""}.`);
+      log(`${enemy.name} uses ${intent.name}: ${damage} damage${blocked ? `, ${blocked} blocked` : ""}${values.chill ? `, ${Math.min(values.chill, intent.value)} weakened by frost` : ""}.`);
       render();
       await wait(650);
       if (state.id !== run) return;
@@ -829,8 +845,10 @@
   }
 
   function makeStock() {
+    state.expandedOffers.clear();
     const types = ["attack", shuffle(["guard", "mend"])[0]];
-    types.push(...shuffle(Object.keys(diceTypes).filter((key) => !types.includes(key))).slice(0, 2));
+    const newType = shuffle(["frost", "lightning", "bloom"])[0];
+    types.push(newType, shuffle(Object.keys(diceTypes).filter((key) => !types.includes(key) && key !== newType))[0]);
     const offers = [
       ...types.map((key) => ({ kind: "dice", key })),
       ...shuffle(Object.keys(abilities).filter((key) => !state.abilities.includes(key))).slice(0, 2).map((key) => ({ kind: "ability", key })),
@@ -876,24 +894,29 @@
     const levels = Object.values(state.skills).reduce((a, b) => a + b, 0);
     $("shop-status").textContent = `♡ ${state.hp} / ${state.maxHp} HP · ${state.collection.length} / ${MAX_DICE} dice · ${state.abilities.length} ${state.abilities.length === 1 ? "ability" : "abilities"} · ${levels} skill ${levels === 1 ? "level" : "levels"}`;
     $("shop-tabs").querySelectorAll("button").forEach((button) => button.setAttribute("aria-pressed", String(button.dataset.filter === state.shopFilter)));
-    const visible = state.stock.map((offer, index) => ({ offer, index })).filter(({ offer }) => state.shopFilter === "all" || offer.kind === state.shopFilter);
-    $("shop-stock").innerHTML = visible.length ? visible.map(({ offer, index }) => {
-      const item = itemDefinition(offer);
-      const unavailable = offerUnavailable(offer);
-      if (offer.kind === "dice") {
-        const owned = state.collection.filter((die) => die.type === offer.key).length;
-        const variants = Object.entries(diceTiers).map(([key, tier]) => {
-          const price = offerPrice(offer, key);
-          const count = state.collection.filter((die) => die.type === offer.key && die.tier === key).length;
-          const disabled = unavailable || state.gold < price;
-          return `<button class="variant-buy variant-${key}" data-offer="${index}" data-tier="${key}" aria-label="Buy ${tier.name} ${item.name} for ${price} gold. Owned ${count}.${unavailable ? " Collection full." : state.gold < price ? " Not enough gold." : ""}"${disabled ? " disabled" : ""}><span class="variant-icon" aria-hidden="true">${tier.icon}</span><span class="variant-copy"><strong>${tier.name}</strong><small>${tier.bonus ? `+${tier.bonus} power` : "Standard power"} · Owned ${count}</small></span><span class="variant-price">${unavailable ? "FULL" : `◈ ${price}`}</span></button>`;
-        }).join("");
-        return `<div class="shop-card dice-shop-card type-${offer.key}"><span class="shop-card-icon">${item.icon}</span><span class="shop-card-kind">SPECIALIZED DIE · OWNED ${owned}</span><h3>${item.name}</h3><p>${item.text}</p><div class="variant-options">${variants}</div><span class="repeat-purchase-note">BUY MULTIPLE · EACH COPY ROLLS SEPARATELY</span></div>`;
-      }
-      const owned = offer.kind === "skill" ? state.skills[offer.key] || 0 : state.abilities.includes(offer.key) ? 1 : 0;
-      const status = offer.bought ? "PURCHASED" : unavailable ? "MAXED / OWNED" : state.gold < offer.price ? "NEED MORE GOLD" : `BUY · ◈ ${offer.price}`;
-      return `<button class="shop-card${offer.bought ? " purchased" : ""}" data-offer="${index}"${unavailable || state.gold < offer.price ? " disabled" : ""}><span class="shop-card-icon">${item.icon}</span><span class="shop-card-kind">${offer.kind === "ability" ? "ACTIVE ABILITY · ONCE / BATTLE" : "PERMANENT SKILL"}${owned ? ` · OWNED ${owned}` : ""}</span><h3>${item.name}</h3><p>${item.text}</p><span class="shop-price">${status}${!unavailable && state.gold < offer.price ? ` · ◈ ${offer.price}` : ""}</span></button>`;
-    }).join("") : '<p class="empty-stock">You already know all the abilities on offer. Browse dice or skills.</p>';
+    if (state.shopFilter === "owned") {
+      renderOwnedDice();
+    } else {
+      const visible = state.stock.map((offer, index) => ({ offer, index })).filter(({ offer }) => state.shopFilter === "all" || offer.kind === state.shopFilter);
+      $("shop-stock").innerHTML = visible.length ? visible.map(({ offer, index }) => {
+        const item = itemDefinition(offer);
+        const unavailable = offerUnavailable(offer);
+        if (offer.kind === "dice") {
+          const owned = state.collection.filter((die) => die.type === offer.key).length;
+          const variants = Object.entries(diceTiers).map(([key, tier]) => {
+            const price = offerPrice(offer, key);
+            const count = state.collection.filter((die) => die.type === offer.key && die.tier === key).length;
+            const disabled = unavailable || state.gold < price;
+            return `<button class="variant-buy variant-${key}" data-offer="${index}" data-tier="${key}" aria-label="Buy ${tier.name} ${item.name} for ${price} gold. Owned ${count}.${unavailable ? " Collection full." : state.gold < price ? " Not enough gold." : ""}"${disabled ? " disabled" : ""}><span class="variant-icon" aria-hidden="true">${tier.icon}</span><span class="variant-copy"><strong>${tier.name}</strong><small>${tier.bonus ? `+${tier.bonus} power` : "Standard power"} · Owned ${count}</small></span><span class="variant-price">${unavailable ? "FULL" : `◈ ${price}`}</span></button>`;
+          });
+          const rare = `<details class="rare-materials" data-rare-offer="${index}"${state.expandedOffers.has(index) ? " open" : ""}><summary>Rare materials <small>Ruby · Emerald · Obsidian</small></summary><div class="variant-options">${variants.slice(3).join("")}</div></details>`;
+          return `<div class="shop-card dice-shop-card type-${offer.key}"><span class="shop-card-icon">${item.icon}</span><span class="shop-card-kind">SPECIALIZED DIE · OWNED ${owned}</span><h3>${item.name}</h3><p>${item.text}</p><div class="variant-options">${variants.slice(0, 3).join("")}</div>${rare}<span class="repeat-purchase-note">BUY MULTIPLE · EACH COPY ROLLS SEPARATELY</span></div>`;
+        }
+        const owned = offer.kind === "skill" ? state.skills[offer.key] || 0 : state.abilities.includes(offer.key) ? 1 : 0;
+        const status = offer.bought ? "PURCHASED" : unavailable ? "MAXED / OWNED" : state.gold < offer.price ? "NEED MORE GOLD" : `BUY · ◈ ${offer.price}`;
+        return `<button class="shop-card${offer.bought ? " purchased" : ""}" data-offer="${index}"${unavailable || state.gold < offer.price ? " disabled" : ""}><span class="shop-card-icon">${item.icon}</span><span class="shop-card-kind">${offer.kind === "ability" ? "ACTIVE ABILITY · ONCE / BATTLE" : "PERMANENT SKILL"}${owned ? ` · OWNED ${owned}` : ""}</span><h3>${item.name}</h3><p>${item.text}</p><span class="shop-price">${status}${!unavailable && state.gold < offer.price ? ` · ◈ ${offer.price}` : ""}</span></button>`;
+      }).join("") : '<p class="empty-stock">You already know all the abilities on offer. Browse dice or skills.</p>';
+    }
     $("refresh-shop").disabled = state.refreshed || state.gold < 5;
     $("refresh-shop").textContent = state.refreshed ? "↻ Stock refreshed" : "↻ New stock · 5 gold";
     $("shop-rest").disabled = state.gold < 8 || state.hp === state.maxHp;
@@ -912,7 +935,11 @@
       return;
     }
     state.gold -= price;
-    if (offer.kind === "dice") state.collection.push({ type: offer.key, tier });
+    if (offer.kind === "dice") {
+      state.collection.push({ id: state.nextDieId++, type: offer.key, tier, paidPrice: price });
+      state.dice = [];
+      state.selected = null;
+    }
     else if (offer.kind === "ability") { offer.bought = true; state.abilities.push(offer.key); }
     else {
       offer.bought = true;
@@ -927,8 +954,71 @@
     (repeatButton || $("leave-shop")).focus({ preventScroll: true });
   }
 
+  function saleRestriction(die) {
+    if (state.collection.length === 1) return "Keep at least one die.";
+    if (diceTypes[die.type].offensive && state.collection.filter((owned) => diceTypes[owned.type].offensive).length === 1) {
+      return "Keep at least one damage-dealing die.";
+    }
+    return "";
+  }
+
+  function renderOwnedDice() {
+    const tierOrder = Object.keys(diceTiers);
+    const owned = [...state.collection].sort((a, b) => tierOrder.indexOf(a.tier) - tierOrder.indexOf(b.tier));
+    $("shop-stock").innerHTML = owned.map((die) => {
+      const tier = diceTiers[die.tier];
+      const refund = Math.floor(die.paidPrice / 2);
+      const restriction = saleRestriction(die);
+      const label = restriction ? state.collection.length === 1 ? "KEEP ONE DIE" : "KEEP A DAMAGE DIE" : `Sell · ◈ ${refund}`;
+      return `<div class="shop-card owned-card type-${die.type}"><span class="owned-gem variant-${die.tier}">${tier.icon}<small>${diceTypes[die.type].icon}</small></span><span class="shop-card-kind">YOUR COLLECTION · ${tier.name.toUpperCase()}</span><h3>${dieName(die)}</h3><p>${diceTypes[die.type].text}</p><span class="owned-material variant-${die.tier}">${tier.bonus ? `+${tier.bonus} material power` : "Standard material power"}</span><span class="owned-cost">${die.paidPrice ? `Paid ${die.paidPrice} gold · Refund ${refund}` : "Free starter die · Refund 0"}</span><button class="secondary-button sell-button" data-sell-id="${die.id}" title="${restriction || `Sell for ${refund} gold`}"${restriction ? " disabled" : ""}>${label}</button>${restriction ? `<span class="owned-restriction">${restriction}</span>` : ""}</div>`;
+    }).join("");
+  }
+
+  function openSale(id) {
+    if (state.phase !== "shop") return;
+    const die = state.collection.find((owned) => owned.id === id);
+    if (!die) { notify("That die is no longer in your collection."); return; }
+    const restriction = saleRestriction(die);
+    if (restriction) { notify(restriction); return; }
+    state.pendingSale = id;
+    $("sell-description").textContent = `Sell your ${dieName(die)} for ${Math.floor(die.paidPrice / 2)} gold? This removes that copy and frees one collection slot.`;
+    $("sell-overlay").hidden = false;
+    $("cancel-sell").focus({ preventScroll: true });
+  }
+
+  function closeSale(restoreFocus = true) {
+    $("sell-overlay").hidden = true;
+    const id = state.pendingSale;
+    state.pendingSale = null;
+    if (restoreFocus) {
+      const button = $("shop-stock").querySelector(`[data-sell-id="${id}"]:not(:disabled)`);
+      (button || $("leave-shop")).focus({ preventScroll: true });
+    }
+  }
+
+  function sellDie(id) {
+    if (state.phase !== "shop") return;
+    const index = state.collection.findIndex((die) => die.id === id);
+    if (index < 0) { notify("That die is no longer in your collection."); return; }
+    const die = state.collection[index];
+    const restriction = saleRestriction(die);
+    if (restriction) { notify(restriction); return; }
+    const refund = Math.floor(die.paidPrice / 2);
+    state.collection.splice(index, 1);
+    state.gold += refund;
+    state.dice = [];
+    state.selected = null;
+    closeSale(false);
+    render();
+    renderShop();
+    log(`${dieName(die)} sold for ${refund} gold. A slot is free for a better die.`);
+    playSound("select");
+    $("leave-shop").focus({ preventScroll: true });
+  }
+
   function leaveShop() {
     if (state.phase !== "shop") return;
+    closeSale(false);
     $("shop-overlay").hidden = true;
     state.encounter++;
     loadEncounter();
@@ -994,7 +1084,7 @@
   }
 
   function openHelp() {
-    if (!$("shop-overlay").hidden || !$("end-overlay").hidden || !$("reset-overlay").hidden) return;
+    if (!$("shop-overlay").hidden || !$("end-overlay").hidden || !$("reset-overlay").hidden || !$("sell-overlay").hidden) return;
     helpReturnFocus = document.activeElement;
     $("help-overlay").hidden = false;
     $("close-help").focus({ preventScroll: true });
@@ -1012,6 +1102,7 @@
   function openReset() {
     if (["rolling", "resolving", "victory"].includes(state.phase)) return;
     closeHelp(false);
+    closeSale(false);
     resetReturnFocus = document.activeElement;
     $("reset-overlay").hidden = false;
     $("cancel-reset").focus({ preventScroll: true });
@@ -1019,8 +1110,8 @@
 
   function cancelReset() {
     $("reset-overlay").hidden = true;
-    if (resetReturnFocus?.isConnected && !resetReturnFocus.disabled) resetReturnFocus.focus({ preventScroll: true });
-    else $("reset-button").focus({ preventScroll: true });
+    if (resetReturnFocus?.isConnected && !resetReturnFocus.disabled && resetReturnFocus.getClientRects().length) resetReturnFocus.focus({ preventScroll: true });
+    else (state.phase === "shop" ? $("leave-shop") : $("reset-button")).focus({ preventScroll: true });
   }
 
   $("main-button").addEventListener("click", () => {
@@ -1037,9 +1128,20 @@
     if (button) void castAbility(button.dataset.ability);
   });
   $("shop-stock").addEventListener("click", (event) => {
+    const sell = event.target.closest("[data-sell-id]");
+    if (sell) { openSale(Number(sell.dataset.sellId)); return; }
     const card = event.target.closest("[data-offer]");
     if (card) buyOffer(Number(card.dataset.offer), card.dataset.tier || "base");
   });
+  $("shop-stock").addEventListener("toggle", (event) => {
+    const details = event.target;
+    if (!details.isConnected || !details.matches(".rare-materials")) return;
+    const index = Number(details.dataset.rareOffer);
+    if (details.open) state.expandedOffers.add(index);
+    else state.expandedOffers.delete(index);
+  }, true);
+  $("cancel-sell").addEventListener("click", () => closeSale());
+  $("confirm-sell").addEventListener("click", () => sellDie(state.pendingSale));
   $("shop-tabs").addEventListener("click", (event) => {
     const button = event.target.closest("[data-filter]");
     if (!button || state.phase !== "shop") return;
@@ -1092,7 +1194,7 @@
     if (event.target === $("help-overlay")) closeHelp();
   });
   document.addEventListener("keydown", (event) => {
-    const overlay = ["reset-overlay", "help-overlay", "shop-overlay", "end-overlay"].map($).find((element) => !element.hidden);
+    const overlay = ["reset-overlay", "sell-overlay", "help-overlay", "shop-overlay", "end-overlay"].map($).find((element) => !element.hidden);
     if (overlay) {
       if (event.key === "Escape" && overlay.id === "help-overlay") {
         event.preventDefault();
@@ -1102,8 +1204,12 @@
         event.preventDefault();
         cancelReset();
       }
+      if (event.key === "Escape" && overlay.id === "sell-overlay") {
+        event.preventDefault();
+        closeSale();
+      }
       if (event.key === "Tab") {
-        const buttons = [...overlay.querySelectorAll("button:not(:disabled)")].filter((button) => button.getClientRects().length);
+        const buttons = [...overlay.querySelectorAll("button:not(:disabled), summary")].filter((button) => button.getClientRects().length);
         const first = buttons[0];
         const last = buttons[buttons.length - 1];
         if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }

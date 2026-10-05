@@ -120,7 +120,8 @@ h1 { font: 600 clamp(20px, 2.5vw, 28px) "Cinzel", Georgia, serif; margin: 0; let
 .reroll-button span { font-size: 8px; padding: 2px 5px; border: 1px solid #82959535; border-radius: 3px; margin-left: 4px; color: var(--gold); }
 .reroll-button:disabled { opacity: .35; }
 .reroll-button:hover:not(:disabled) { color: var(--gold); }
-.action-slots { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.action-slots { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.assignment-panel { min-width: 0; }
 .action-slot { position: relative; display: grid; grid-template-columns: auto 1fr auto; gap: 6px; align-items: center; text-align: left; padding: 14px 12px 9px; border: 1px solid #ffffff12; border-radius: 7px; background: #0f1d2560; transition: .2s; --action-color: var(--attack); }
 .action-slot.guard { --action-color: var(--guard); }
 .action-slot.mend { --action-color: var(--mend); }
@@ -208,17 +209,30 @@ footer { display: flex; justify-content: space-between; gap: 10px; padding: 22px
 .type-flame { --die-light: #ffd68b; --die-dark: #c2774c; --die-ink: #f4b76e; }
 .type-blood { --die-light: #efbed0; --die-dark: #ad6585; --die-ink: #e8a2bf; }
 .type-fortune { --die-light: #f6e3a3; --die-dark: #b39448; --die-ink: #f4d383; }
+.type-frost { --die-light: #d2f5fa; --die-dark: #539bb3; --die-ink: #93e0ec; }
+.type-lightning { --die-light: #e5d1ff; --die-dark: #8b70c9; --die-ink: #c6a7ff; }
+.type-bloom { --die-light: #e2f4c7; --die-dark: #8dab67; --die-ink: #c2e89d; }
 .die-assignment { color: var(--die-ink); }
 .die .pip, .die[data-value="6"] .pip { background: color-mix(in srgb, var(--die-dark) 25%, #263132); }
 .die.tier-gold { --die-light: #fff0b3; --die-dark: #c08b32; --die-edge: #a57230; background: linear-gradient(135deg, #fff4c6, #f2cf6e 35%, #eab74e 65%, #c08b32); border-color: #ffe7a7; }
 .die.tier-diamond { --die-light: #e9fbff; --die-dark: #6da5bf; --die-edge: #527e9a; background: linear-gradient(125deg, #effdff, #bce7ee 37%, #e4f6fc 38%, #c0e0f4 62%, #96c8e0 63%, #81accb); border-color: #ddfaff; }
-.die.tier-gold::before, .die.tier-diamond::before { content: ""; position: absolute; inset: 0; border-radius: inherit; background: linear-gradient(120deg, transparent 40%, #ffffff50 41%, #ffffff15 56%, transparent 57%); pointer-events: none; }
+.die.tier-ruby { --die-light: #fcb6c9; --die-dark: #a2385e; --die-edge: #6f254b; background: linear-gradient(125deg, #ffd7de, #eb779b 37%, #f7a8c0 38%, #d85c87 62%, #b2446b 63%, #8e315a); border-color: #ffb7d0; }
+.die.tier-emerald { --die-light: #b7f7d5; --die-dark: #328869; --die-edge: #226553; background: linear-gradient(125deg, #dbffdf, #85dbaf 37%, #b1efd0 38%, #6ecb9c 62%, #3b9f80 63%, #28765c); border-color: #b2f8d7; }
+.die.tier-obsidian { --die-light: #bd9bea; --die-dark: #433264; --die-edge: #30233f; background: linear-gradient(125deg, #9c7fc1, #47345e 37%, #685383 38%, #392942 62%, #604677 63%, #2a2036); border-color: #ac88d4; }
+.die.tier-obsidian .pip, .die.tier-obsidian[data-value="6"] .pip { background: #f0dfff; box-shadow: 0 0 5px #d9b1ff35; }
+.die:not(.tier-base)::before { content: ""; position: absolute; inset: 0; border-radius: inherit; background: linear-gradient(120deg, transparent 40%, #ffffff50 41%, #ffffff15 56%, transparent 57%); pointer-events: none; }
 .die-tier-mark { position: absolute; top: -9px; right: -9px; width: 27px; height: 30px; display: flex; flex-direction: column; align-items: center; justify-content: center; background: #49371e; border: 1px solid #e8c668; border-radius: 6px; font-size: 12px; color: #ffe39a; box-shadow: 0 2px 8px #0005; z-index: 3; }
 .die-tier-mark small { font-size: 7px; line-height: 1; margin-top: 1px; font-weight: 700; }
 .tier-diamond .die-tier-mark { color: #d4f6ff; background: #203a4c; border-color: #9ed8f0; }
+.tier-ruby .die-tier-mark { color: #ffc6d9; background: #54273d; border-color: #e990b1; }
+.tier-emerald .die-tier-mark { color: #b5f7d2; background: #193d32; border-color: #79d6ab; }
+.tier-obsidian .die-tier-mark { color: #e5c7ff; background: #342441; border-color: #b38bd7; }
 .die-type-label small { display: block; margin-top: 3px; font-size: 6px; letter-spacing: .9px; color: #95a8ac; }
 .tier-gold .die-type-label small { color: #e2c180; }
 .tier-diamond .die-type-label small { color: #acd8f1; }
+.tier-ruby .die-type-label small { color: #f6a7c1; }
+.tier-emerald .die-type-label small { color: #8edfb5; }
+.tier-obsidian .die-type-label small { color: #cba9ef; }
 .dice-tray { row-gap: 56px; padding-bottom: 50px; }
 .special-effects { display: flex; gap: 9px; flex-wrap: wrap; color: #d5b6d9; font-size: 10px; padding: 10px 0 0; }
 .special-effects:empty { display: none; }
@@ -241,7 +255,7 @@ footer { display: flex; justify-content: space-between; gap: 10px; padding: 22px
 .shop-purse { color: var(--gold); font: 600 29px "Cinzel", Georgia, serif; text-align: right; white-space: nowrap; }
 .shop-purse small { display: block; font: 600 7px "DM Sans", sans-serif; letter-spacing: 1.6px; margin-top: 3px; }
 .shop-status { padding: 10px 13px; background: #7a9e840c; border: 1px solid #99b69f23; border-radius: 5px; font-size: 11px; color: #b4ccb8; margin: 16px 0; }
-.shop-tabs { display: flex; gap: 6px; margin: 20px 0 14px; }
+.shop-tabs { display: flex; flex-wrap: wrap; gap: 6px; margin: 20px 0 14px; }
 .shop-tabs button { border: 1px solid #99afb225; border-radius: 5px; background: transparent; padding: 8px 12px; font-size: 11px; color: #9cb2b7; }
 .shop-tabs button[aria-pressed="true"] { color: var(--gold); border-color: #d0b37570; background: #d0b3750a; }
 .shop-stock { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 11px; }
@@ -264,12 +278,30 @@ footer { display: flex; justify-content: space-between; gap: 10px; padding: 22px
 .variant-gold:hover:not(:disabled) { border-color: #edd19a; background: #d1a45818; }
 .variant-diamond { color: #b8e1f3; border-color: #81b7da50; background: #8abde30b; }
 .variant-diamond:hover:not(:disabled) { border-color: #b8e1f3; background: #8abde31b; }
+.variant-ruby { color: #f3adc5; border-color: #da739650; background: #db65970b; }
+.variant-ruby:hover:not(:disabled) { border-color: #f3adc5; background: #db65971b; }
+.variant-emerald { color: #a0e2bf; border-color: #65ba9250; background: #65ba920b; }
+.variant-emerald:hover:not(:disabled) { border-color: #a0e2bf; background: #65ba921b; }
+.variant-obsidian { color: #d5b5f5; border-color: #a080c950; background: #a080c90b; }
+.variant-obsidian:hover:not(:disabled) { border-color: #d5b5f5; background: #a080c91b; }
 .variant-icon { font-size: 15px; }
 .variant-copy { flex: 1; min-width: 0; }
 .variant-copy strong { display: block; font-size: 10px; font-weight: 600; }
 .variant-copy small { display: block; font-size: 7px; color: #8ea6ac; margin-top: 3px; line-height: 1.5; }
 .variant-price { font-size: 10px; font-weight: 600; white-space: nowrap; }
 .repeat-purchase-note { font-size: 6px; letter-spacing: .6px; color: #8ca6a5; text-align: center; margin-top: 10px; line-height: 1.7; }
+.rare-materials { margin-top: 9px; border-top: 1px solid #b993df25; padding-top: 9px; }
+.rare-materials summary { color: #ccb0e8; font-size: 10px; cursor: pointer; line-height: 1.6; }
+.rare-materials summary small { display: block; font-size: 7px; color: #9b8eae; margin-top: 2px; }
+.rare-materials[open] .variant-options { margin-top: 9px; }
+.rare-materials summary:focus-visible { outline: 2px solid var(--gold); outline-offset: 4px; border-radius: 2px; }
+.owned-gem { position: relative; display: grid; place-items: center; width: 52px; height: 52px; border: 1px solid #a6b1a62e; border-radius: 12px; font-size: 30px; margin-bottom: 15px; }
+.owned-gem small { position: absolute; right: -7px; bottom: -5px; display: grid; place-items: center; width: 23px; height: 23px; border-radius: 6px; border: 1px solid var(--die-ink, var(--gold)); background: #1a2932; color: var(--die-ink, var(--gold)); font-size: 12px; }
+.owned-material { border: 1px solid #ffffff15; border-radius: 4px; padding: 5px 7px; font-size: 9px; margin-top: auto; }
+.owned-cost { font-size: 9px; line-height: 1.6; color: #98acae; margin: 12px 0; }
+.owned-restriction { color: #9da7b7; font-size: 9px; line-height: 1.6; margin-top: 7px; }
+.sell-button { color: var(--gold); border-color: #d0b37555; }
+.sell-modal { z-index: 1; }
 .shop-utilities { display: flex; gap: 10px; margin: 18px 0 0; }
 .shop-footer { display: flex; justify-content: space-between; gap: 14px; align-items: center; position: sticky; bottom: -35px; padding: 18px 0 8px; margin-top: 10px; background: #14232df5; border-top: 1px solid #9ab1ac20; backdrop-filter: blur(8px); }
 .shop-footer p { margin: 0; font-size: 9px; color: #8da5ae; line-height: 1.6; }
@@ -321,7 +353,7 @@ footer { display: flex; justify-content: space-between; gap: 10px; padding: 22px
   .character-art.boss.demon { width: 245px; }
   .hero-caption { font-size: 9px; gap: 5px; }
   .battle-console { padding: 22px; margin-top: 18px; }
-  .controls-layout { grid-template-columns: 1fr; margin-top: 21px; gap: 23px; }
+  .controls-layout { grid-template-columns: minmax(0, 1fr); margin-top: 21px; gap: 23px; }
   .dice-panel { border: 0; padding: 0; }
   .dice-tray { gap: 24px; }
   .die { width: 66px; height: 66px; }
@@ -392,11 +424,11 @@ footer { display: flex; justify-content: space-between; gap: 10px; padding: 22px
   #dice-caption { font-size: 7px; letter-spacing: .5px; margin-right: 3px; }
   .reroll-button { font-size: 10px; }
   .action-slots { gap: 7px; }
-  .action-slot { grid-template-columns: 1fr auto; padding: 11px 8px 7px; }
+  .action-slot { grid-template-columns: minmax(0, 1fr); padding: 11px 8px 7px; }
   .action-symbol { display: none; }
   .action-copy strong { font-size: 12px; }
-  .action-copy small { font-size: 8px; letter-spacing: -.2px; }
-  .action-value { font-size: 18px; }
+  .action-copy small { font-size: 8px; letter-spacing: -.2px; white-space: normal; }
+  .action-value { font-size: 22px; }
   .slot-dice { font-size: 8px; letter-spacing: .2px; }
   .commit-row { gap: 12px; }
   #combat-preview { font-size: 10px; max-width: 160px; }
