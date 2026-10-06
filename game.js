@@ -150,6 +150,13 @@
   let practiceReturnFocus;
   let runSerial = 0;
   let toastTimer;
+  const SAVE_KEY = "diceattack-run-save-v1";
+  const stablePhases = ["ready", "rolled", "shop", "victory", "won", "lost"];
+  let tutorialSeen = false;
+  let lastSavedText = null;
+  let restoring = false;
+  let savingPaused = false;
+  let scrollSaveTimer;
   const wait = (ms) => new Promise((resolve) => setTimeout(resolve, reducedMotion ? Math.min(ms, 25) : ms));
   const rollDie = () => Math.floor(Math.random() * 6) + 1;
 
@@ -166,6 +173,141 @@
       clearTimeout(toastTimer);
       $("toast").hidden = true;
     }
+  }
+
+  function pauseSaving(error) {
+    console.warn("Dice Attack could not save or restore this run.", error);
+    if (!savingPaused) notify("Your saved run could not be read or written. Progress is not being saved. Reset the run to retry; unreadable saves won't be overwritten automatically.", "error");
+    savingPaused = true;
+    $("save-status").textContent = "AUTOSAVE UNAVAILABLE";
+  }
+
+  function saveProgress(force = false) {
+    if (!state || restoring || savingPaused || (!force && document.hidden) || !stablePhases.includes(state.phase) || practice?.busy) return;
+    const snapshot = {
+      version: 1,
+      state: { ...state, id: undefined, usedAbilities: [...state.usedAbilities], expandedOffers: [...state.expandedOffers] },
+      tutorialSeen, tutorialStep: practice ? practice.step : null,
+      journal: [...$("battle-log").children].map((entry) => entry.lastChild.textContent),
+      view: {
+        help: ["ready", "rolled"].includes(state.phase) && !$("help-overlay").hidden, reset: !$("reset-overlay").hidden,
+        page: window.scrollY, shop: $("shop-overlay").querySelector(".modal").scrollTop,
+        tutorial: $("tutorial-overlay").querySelector(".modal").scrollTop,
+        instructions: $("help-overlay").querySelector(".modal").scrollTop
+      }
+    };
+    const text = JSON.stringify(snapshot);
+    try {
+      if (localStorage.getItem(SAVE_KEY) !== lastSavedText) return;
+      if (text !== lastSavedText) localStorage.setItem(SAVE_KEY, text);
+      lastSavedText = text;
+      $("save-status").textContent = "PROGRESS SAVED ON THIS BROWSER";
+    } catch (error) { pauseSaving(error); }
+  }
+
+  function validateSave(saved) {
+    const require = (valid, field) => { if (!valid) throw new Error(`Invalid saved ${field}.`); };
+    const integer = (value, min = 0, max = Number.MAX_SAFE_INTEGER) => Number.isSafeInteger(value) && value >= min && value <= max;
+    const object = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
+    const catalogKeys = (list, catalog) => Array.isArray(list) && new Set(list).size === list.length && list.every((key) => typeof key === "string" && Object.hasOwn(catalog, key));
+    const die = (value) => object(value) && typeof value.type === "string" && typeof value.tier === "string" && Object.hasOwn(diceTypes, value.type) && Object.hasOwn(diceTiers, value.tier) && integer(value.id, 1) && integer(value.paidPrice);
+    require(object(saved) && saved.version === 1 && object(saved.state), "format");
+    const s = saved.state;
+    require(stablePhases.includes(s.phase) && typeof s.code === "string" && /^[A-Z0-9]{4}$/.test(s.code), "phase or run code");
+    require(Array.isArray(s.encounters) && s.encounters.length === RUN_LENGTH, "route");
+    s.encounters.forEach((round, i) => {
+      require(object(round) && round.zone === Math.min(zones.length - 1, Math.floor(i / SHOP_INTERVAL)), "area");
+      if ((i + 1) % SHOP_INTERVAL === 0) {
+        require(round.kind === "shop" && round.name === "The Wayfarer's Market", "shop round");
+        return;
+      }
+      const monster = monsters.find((item) => round.name === `${round.elite ? "Frenzied " : ""}${item.name}` && item.zone === round.zone);
+      require(monster && round.kind === "battle" && round.type === monster.type && Boolean(round.boss) === Boolean(monster.boss) && Boolean(round.final) === (i === RUN_LENGTH - 1), "monster");
+      require(Boolean(round.boss) === (i % SHOP_INTERVAL === 3 || i === RUN_LENGTH - 1), "guardian");
+      require(integer(round.hp, 1) && integer(round.gold, 1) && integer(round.moveOffset, 0, monster.moves.length - 1), "monster values");
+      require(Array.isArray(round.moves) && round.moves.length === monster.moves.length && round.moves.every((move, j) => Array.isArray(move) && move.length === 3 && move[0] === monster.moves[j][0] && integer(move[1], 1) && move[2] === monster.moves[j][2]), "monster moves");
+      require(typeof round.role === "string" && typeof round.flavor === "string" && !/[<>&"]/.test(round.role + round.flavor), "monster text");
+      require(round.color === monster.color && Boolean(round.armored) === Boolean(monster.armored) && Boolean(round.wings) === Boolean(monster.wings) && Boolean(round.mushroom) === Boolean(monster.mushroom), "monster artwork");
+    });
+    require(Array.isArray(s.omens) && s.omens.length === zones.length && s.omens.every((omen) => omens.some((known) => JSON.stringify(known) === JSON.stringify(omen))), "omens");
+    require(integer(s.encounter, 0, RUN_LENGTH - 1) && integer(s.completed, 0, RUN_LENGTH) && integer(s.defeated, 0, BATTLE_COUNT), "progress");
+    const completed = ["victory", "won"].includes(s.phase) ? s.encounter + 1 : s.encounter;
+    require(s.completed === completed && s.defeated === completed - Math.floor(completed / SHOP_INTERVAL), "completed rounds");
+    require((s.phase === "shop") === (s.encounters[s.encounter].kind === "shop") && (s.phase !== "won" || s.encounter === RUN_LENGTH - 1), "round phase");
+    require(object(s.skills) && Object.entries(s.skills).every(([key, level]) => Object.hasOwn(skills, key) && integer(level, 1, skills[key].max)), "skills");
+    require(s.power === (s.skills.power || 0) && s.ward === (s.skills.ward || 0) && s.healing === (s.skills.healing || 0) && s.critBonus === 3 + (s.skills.critical || 0) * 2 && s.recovery === (s.skills.recovery || 0) * 4 && s.maxHp === 40 + (s.skills.vitality || 0) * 8 && s.lootBonus === (s.skills.loot || 0) * .25 && s.extraRerolls === (s.skills.luck || 0), "skill bonuses");
+    require(integer(s.hp, 0, s.maxHp) && (s.hp === 0) === (s.phase === "lost") && integer(s.shield) && integer(s.gold) && integer(s.turn, 1) && integer(s.rerolls, 0, 1 + s.extraRerolls), "player values");
+    require(Array.isArray(s.collection) && s.collection.length >= 1 && s.collection.length <= MAX_DICE && s.collection.every(die) && new Set(s.collection.map((owned) => owned.id)).size === s.collection.length && s.collection.some((owned) => diceTypes[owned.type].offensive), "collection");
+    require(integer(s.nextDieId, Math.max(...s.collection.map((owned) => owned.id)) + 1), "next die ID");
+    require(Array.isArray(s.dice) && (s.dice.length === 0 || s.dice.length === s.collection.length) && s.dice.every((rolled, i) => die(rolled) && rolled.id === s.collection[i].id && rolled.type === s.collection[i].type && rolled.tier === s.collection[i].tier && rolled.paidPrice === s.collection[i].paidPrice && integer(rolled.value, 1, 6)), "rolled dice");
+    require((s.phase !== "rolled" || s.dice.length === s.collection.length) && (s.phase !== "ready" || s.dice.length === 0) && (s.selected === null || integer(s.selected, 0, s.dice.length - 1)), "dice selection");
+    require(catalogKeys(s.abilities, abilities) && Array.isArray(s.usedAbilities) && new Set(s.usedAbilities).size === s.usedAbilities.length && s.usedAbilities.every((key) => s.abilities.includes(key)), "abilities");
+    const source = s.encounters[s.phase === "shop" ? s.encounter - 1 : s.encounter];
+    require(object(s.enemy) && s.enemy.name === source.name && s.enemy.type === source.type && s.enemy.zone === source.zone && s.enemy.maxHp === source.hp && integer(s.enemy.hp, 0, source.hp) && integer(s.enemy.shield) && integer(s.enemy.poison, 0, 12) && typeof s.enemy.frozen === "boolean", "current enemy");
+    require(JSON.stringify(s.enemy.moves) === JSON.stringify(source.moves) && s.enemy.moveOffset === source.moveOffset, "current enemy moves");
+    require((s.enemy.hp === 0) === ["shop", "victory", "won"].includes(s.phase), "enemy health");
+    require(object(s.stats) && ["rolls", "damage", "criticals", "earned"].every((key) => integer(s.stats[key])), "statistics");
+    require(Array.isArray(s.stock) && s.stock.length <= 10 && s.stock.every((offer) => object(offer) && ["dice", "skill", "ability"].includes(offer.kind) && typeof offer.key === "string" && Object.hasOwn(offer.kind === "dice" ? diceTypes : offer.kind === "skill" ? skills : abilities, offer.key) && integer(offer.price, 1) && typeof offer.bought === "boolean"), "market stock");
+    require(["all", "dice", "skill", "ability", "owned"].includes(s.shopFilter) && typeof s.refreshed === "boolean" && Array.isArray(s.expandedOffers) && s.expandedOffers.every((index) => integer(index, 0, s.stock.length - 1)), "market state");
+    require(s.pendingSale === null || (s.phase === "shop" && s.collection.some((owned) => owned.id === s.pendingSale)), "pending sale");
+    require(s.phase === "victory" ? object(s.reward) && integer(s.reward.gold, 1) && integer(s.reward.recovery, 0, s.maxHp) : s.reward === null, "reward");
+    require(typeof saved.tutorialSeen === "boolean" && (saved.tutorialStep === null || (saved.tutorialSeen && ["ready", "rolled"].includes(s.phase) && integer(saved.tutorialStep, 0, tutorialSteps.length - 1))), "tutorial");
+    require(Array.isArray(saved.journal) && saved.journal.length <= 3 && saved.journal.every((message) => typeof message === "string" && message.length <= 1000), "journal");
+    require(object(saved.view) && typeof saved.view.help === "boolean" && typeof saved.view.reset === "boolean" && ["page", "shop", "tutorial", "instructions"].every((key) => Number.isFinite(saved.view[key]) && saved.view[key] >= 0 && saved.view[key] <= 1000000), "view");
+    require((!saved.view.help || ["ready", "rolled"].includes(s.phase)) && (!saved.view.reset || (["ready", "rolled", "shop", "won", "lost"].includes(s.phase) && s.pendingSale === null)) && (!saved.view.help || !saved.view.reset) && (saved.tutorialStep === null || (!saved.view.help && !saved.view.reset)), "open dialog");
+  }
+
+  function restoreProgress(text) {
+    let saved;
+    try {
+      if (text === null) return false;
+      saved = JSON.parse(text);
+      validateSave(saved);
+    } catch (error) { pauseSaving(error); return false; }
+    restoring = true;
+    state = { ...saved.state, id: ++runSerial, usedAbilities: new Set(saved.state.usedAbilities), expandedOffers: new Set(saved.state.expandedOffers) };
+    const source = state.encounters[state.phase === "shop" ? state.encounter - 1 : state.encounter];
+    state.enemy = { ...source, hp: saved.state.enemy.hp, maxHp: source.hp, shield: saved.state.enemy.shield, poison: saved.state.enemy.poison, frozen: saved.state.enemy.frozen };
+    tutorialSeen = saved.tutorialSeen;
+    practice = saved.tutorialStep === null ? null : createPractice(saved.tutorialStep);
+    lastSavedText = text;
+    ["shop-overlay", "reward-overlay", "sell-overlay", "end-overlay", "reset-overlay", "help-overlay", "tutorial-overlay"].forEach((id) => { $(id).hidden = true; });
+    $("hero-art").className = "character-art";
+    $("hero-art").innerHTML = heroArtwork();
+    $("hero-effects").replaceChildren();
+    $("enemy-effects").replaceChildren();
+    $("battle-log").replaceChildren();
+    saved.journal.forEach(log);
+    paintEncounter();
+    if (state.phase === "shop") {
+      $("shop-overlay").hidden = false;
+      renderShopHeading();
+      renderShop();
+      if (state.pendingSale !== null) openSale(state.pendingSale);
+      else $("leave-shop").focus({ preventScroll: true });
+    } else if (state.phase === "victory") {
+      $("enemy-art").classList.add("defeated");
+      renderReward(true);
+      $("reward-continue").focus({ preventScroll: true });
+    } else if (["won", "lost"].includes(state.phase)) {
+      if (state.phase === "lost") $("hero-art").classList.add("defeated");
+      showEnding(state.phase === "won");
+    } else if (practice) {
+      paintPractice();
+      $("tutorial-overlay").hidden = false;
+      renderTutorial();
+    } else if (state.phase === "rolled" && state.selected !== null) $("dice-tray").children[state.selected].focus({ preventScroll: true });
+    else $("main-button").focus({ preventScroll: true });
+    if (saved.view.reset) openReset();
+    else if (saved.view.help) openHelp();
+    window.scrollTo(0, saved.view.page);
+    $("shop-overlay").querySelector(".modal").scrollTop = saved.view.shop;
+    $("tutorial-overlay").querySelector(".modal").scrollTop = saved.view.tutorial;
+    $("help-overlay").querySelector(".modal").scrollTop = saved.view.instructions;
+    restoring = false;
+    savingPaused = false;
+    $("save-status").textContent = "PROGRESS SAVED ON THIS BROWSER";
+    return true;
   }
 
   function readRecord() {
@@ -497,7 +639,11 @@
     return svgFrame(scene + sparks, `<linearGradient id="scene-bg" x2="0" y2="1"><stop stop-color="${color[0]}"/><stop offset="1" stop-color="${color[1]}"/></linearGradient>`, "0 0 1200 400").replace('<svg xmlns=', '<svg preserveAspectRatio="xMidYMid slice" xmlns=');
   }
 
-  function startRun() {
+  function startRun(replaceSave = false) {
+    if (replaceSave) {
+      try { lastSavedText = localStorage.getItem(SAVE_KEY); savingPaused = false; }
+      catch (error) { pauseSaving(error); }
+    }
     clearInfoToast();
     practice = null;
     $("practice-dice").replaceChildren();
@@ -531,6 +677,11 @@
     state.selected = null;
     state.rerolls = 1 + state.extraRerolls;
     state.usedAbilities = new Set();
+    paintEncounter();
+  }
+
+  function paintEncounter() {
+    const definition = state.enemy;
     const zoneIndex = definition.zone;
     const zone = zones[zoneIndex];
     $("zone-title").textContent = zone.title;
@@ -658,6 +809,7 @@
     $("combat-preview").textContent = phase === "rolled" ? `${outgoing} damage${poison ? ` + ${poison} poison` : ""} · ${Math.min(values.mend, state.maxHp - state.hp)} healing · ${outgoing + poison >= enemy.hp ? "lethal — no counterattack!" : `${incoming} incoming damage`}` : "Each die keeps its own role. Attack sixes deal bonus damage.";
     renderAbilities();
     $("skill-list").innerHTML = Object.entries(state.skills).map(([key, level]) => `<span title="${skills[key].text}">${skills[key].icon} ${skills[key].name} ${level > 1 ? `×${level}` : ""}</span>`).join("");
+    saveProgress();
   }
 
   function dieMarkup(value) {
@@ -689,6 +841,7 @@
     entry.append(mark, message);
     $("battle-log").append(entry);
     while ($("battle-log").children.length > 3) $("battle-log").firstElementChild.remove();
+    queueMicrotask(() => saveProgress());
   }
 
   function selectDie(index) {
@@ -908,20 +1061,25 @@
     playSound("victory");
     log(`${state.enemy.name} falls. +${gold} gold${recovery ? `, +${recovery} health` : ""}.`);
     closeHelp(false);
-    $("reward-description").textContent = `${state.enemy.name} defeated. Round ${state.encounter + 1} complete. Your spoils have been added to your run.`;
-    $("reward-gold").textContent = `+${gold}`;
-    $("reward-health").textContent = recovery ? `+${recovery}` : "FULL";
-    $("reward-health-note").textContent = recovery ? `${state.hp} / ${state.maxHp} HP now` : "Already at maximum health";
-    $("reward-wallet").textContent = `Your purse: ${state.gold} gold`;
-    $("reward-continue").textContent = state.encounter === RUN_LENGTH - 1 ? "Claim victory ↗" : state.encounters[state.encounter + 1].kind === "shop" ? "Enter the market ↗" : "Next round ↗";
-    $("reward-continue").disabled = true;
-    $("reward-overlay").hidden = false;
+    renderReward(false);
     render();
     $("reward-overlay").querySelector(".modal").focus({ preventScroll: true });
     await wait(1000);
     if (state.id !== run) return;
     $("reward-continue").disabled = false;
     $("reward-continue").focus({ preventScroll: true });
+  }
+
+  function renderReward(ready) {
+    const { gold, recovery } = state.reward;
+    $("reward-description").textContent = `${state.enemy.name} defeated. Round ${state.encounter + 1} complete. Your spoils have been added to your run.`;
+    $("reward-gold").textContent = `+${gold}`;
+    $("reward-health").textContent = recovery ? `+${recovery}` : "FULL";
+    $("reward-health-note").textContent = recovery ? `${state.hp} / ${state.maxHp} HP now` : "Already at maximum health";
+    $("reward-wallet").textContent = `Your purse: ${state.gold} gold`;
+    $("reward-continue").textContent = state.encounter === RUN_LENGTH - 1 ? "Claim victory ↗" : state.encounters[state.encounter + 1].kind === "shop" ? "Enter the market ↗" : "Next round ↗";
+    $("reward-continue").disabled = !ready;
+    $("reward-overlay").hidden = false;
   }
 
   function continueVictory() {
@@ -976,13 +1134,17 @@
     state.refreshed = false;
     makeStock();
     closeHelp(false);
-    $("shop-eyebrow").textContent = `ROUND ${state.encounter + 1} / ${RUN_LENGTH} · SHOP ONLY`;
-    $("shop-description").textContent = `A safe haven in ${zones[state.encounters[state.encounter].zone].title}. No monster this round: spend your gold, upgrade your dice, and prepare for ${state.encounter === RUN_LENGTH - 2 ? "the final guardian" : "the next area"}.`;
+    renderShopHeading();
     $("shop-overlay").hidden = false;
     render();
     renderShop();
     $("shop-overlay").querySelector(".shop-modal").scrollTop = 0;
     $("leave-shop").focus({ preventScroll: true });
+  }
+
+  function renderShopHeading() {
+    $("shop-eyebrow").textContent = `ROUND ${state.encounter + 1} / ${RUN_LENGTH} · SHOP ONLY`;
+    $("shop-description").textContent = `A safe haven in ${zones[state.encounters[state.encounter].zone].title}. No monster this round: spend your gold, upgrade your dice, and prepare for ${state.encounter === RUN_LENGTH - 2 ? "the final guardian" : "the next area"}.`;
   }
 
   function renderShop() {
@@ -1016,6 +1178,7 @@
     $("refresh-shop").disabled = state.refreshed || state.gold < 5;
     $("refresh-shop").textContent = state.refreshed ? "↻ Stock refreshed" : "↻ New stock · 5 gold";
     $("shop-rest").disabled = state.gold < 8 || state.hp === state.maxHp;
+    saveProgress();
   }
 
   function buyOffer(index, tier = "base") {
@@ -1080,6 +1243,7 @@
     $("sell-description").textContent = `Sell your ${dieName(die)} for ${Math.floor(die.paidPrice / 2)} gold? This removes that copy and frees one collection slot.`;
     $("sell-overlay").hidden = false;
     $("cancel-sell").focus({ preventScroll: true });
+    saveProgress();
   }
 
   function closeSale(restoreFocus = true) {
@@ -1090,6 +1254,7 @@
       const button = $("shop-stock").querySelector(`[data-sell-id="${id}"]:not(:disabled)`);
       (button || $("leave-shop")).focus({ preventScroll: true });
     }
+    saveProgress();
   }
 
   function sellDie(id) {
@@ -1202,14 +1367,19 @@
     if (!["ready", "rolled"].includes(state.phase) || !$("reset-overlay").hidden || practice) return;
     practiceReturnFocus = document.activeElement;
     closeHelp(false);
-    practice = { step: 0, busy: false, action: null, hp: 30, shield: 0, enemyHp: 20, enemyShield: 2, gold: 0, owned: 1, dice: [] };
-    $("practice-scene").innerHTML = practiceArtwork(sceneArtwork(0));
-    $("practice-hero-art").innerHTML = practiceArtwork(heroArtwork());
-    $("practice-enemy-art").innerHTML = practiceArtwork(slimeArtwork({ color: "#8acb86" }));
+    tutorialSeen = true;
+    practice = createPractice(0);
+    paintPractice();
     $("tutorial-overlay").hidden = false;
     $("tutorial-overlay").querySelector(".modal").scrollTop = 0;
     render();
     renderTutorial();
+  }
+
+  function paintPractice() {
+    $("practice-scene").innerHTML = practiceArtwork(sceneArtwork(0));
+    $("practice-hero-art").innerHTML = practiceArtwork(heroArtwork());
+    $("practice-enemy-art").innerHTML = practiceArtwork(slimeArtwork({ color: "#8acb86" }));
   }
 
   function closeTutorial(restoreFocus = true) {
@@ -1249,6 +1419,7 @@
     $("tutorial-action").disabled = practice.busy || ["select", "buy"].includes(step.action);
     const target = practice.busy ? $("tutorial-overlay").querySelector(".modal") : practice.step === 1 ? $("practice-dice").querySelector("button") : practice.step === 8 ? $("practice-buy") : $("tutorial-action");
     target.focus({ preventScroll: true });
+    saveProgress();
   }
 
   function selectPracticeDie(index) {
@@ -1268,6 +1439,17 @@
     playSound(["roll", "reroll", "next", "finish"].includes(action) ? "roll" : action === "collect" || action === "buy" ? "heal" : "hit");
     await wait(500);
     if (practice !== session) return;
+    advancePractice(session, action);
+    renderTutorial();
+  }
+
+  function createPractice(step) {
+    const session = { step: 0, busy: false, action: null, hp: 30, shield: 0, enemyHp: 20, enemyShield: 2, gold: 0, owned: 1, dice: [] };
+    while (session.step < step) advancePractice(session, tutorialSteps[session.step].action);
+    return session;
+  }
+
+  function advancePractice(session, action) {
     if (action === "roll") session.dice = ["attack", "guard", "mend"].map((type, i) => ({ type, tier: "base", value: [3, 6, 2][i] }));
     else if (action === "reroll") session.dice[0].value = 6;
     else if (action === "next") session.dice = [{ type: "attack", tier: "base", value: 6 }];
@@ -1286,7 +1468,6 @@
     session.busy = false;
     session.action = null;
     session.step++;
-    renderTutorial();
   }
 
   function openHelp() {
@@ -1295,6 +1476,7 @@
     $("help-overlay").hidden = false;
     $("help-overlay").querySelector(".modal").scrollTop = 0;
     $("close-help").focus({ preventScroll: true });
+    saveProgress();
   }
 
   function closeHelp(restoreFocus = true) {
@@ -1304,6 +1486,7 @@
       const target = helpReturnFocus?.isConnected && !helpReturnFocus.disabled ? helpReturnFocus : $("help-button");
       target.focus({ preventScroll: true });
     }
+    saveProgress();
   }
 
   function openReset() {
@@ -1313,12 +1496,14 @@
     resetReturnFocus = document.activeElement;
     $("reset-overlay").hidden = false;
     $("cancel-reset").focus({ preventScroll: true });
+    saveProgress();
   }
 
   function cancelReset() {
     $("reset-overlay").hidden = true;
     if (resetReturnFocus?.isConnected && !resetReturnFocus.disabled && resetReturnFocus.getClientRects().length) resetReturnFocus.focus({ preventScroll: true });
     else (state.phase === "shop" ? $("leave-shop") : $("reset-button")).focus({ preventScroll: true });
+    saveProgress();
   }
 
   $("main-button").addEventListener("click", () => {
@@ -1346,6 +1531,7 @@
     const index = Number(details.dataset.rareOffer);
     if (details.open) state.expandedOffers.add(index);
     else state.expandedOffers.delete(index);
+    saveProgress();
   }, true);
   $("cancel-sell").addEventListener("click", () => closeSale());
   $("confirm-sell").addEventListener("click", () => sellDie(state.pendingSale));
@@ -1383,11 +1569,11 @@
   $("shop-reset").addEventListener("click", openReset);
   $("cancel-reset").addEventListener("click", cancelReset);
   $("confirm-reset").addEventListener("click", () => {
-    startRun();
+    startRun(true);
     $("main-button").focus({ preventScroll: true });
   });
   $("restart-button").addEventListener("click", () => {
-    startRun();
+    startRun(true);
     $("main-button").focus({ preventScroll: true });
   });
   $("sound-button").addEventListener("click", () => {
@@ -1455,6 +1641,35 @@
     }
   });
 
+  function syncProgress() {
+    let text;
+    try { text = localStorage.getItem(SAVE_KEY); }
+    catch (error) { pauseSaving(error); return; }
+    if (text !== lastSavedText && text !== null) restoreProgress(text);
+    else {
+      if (text === null) lastSavedText = null;
+      saveProgress();
+    }
+  }
+
+  document.addEventListener("visibilitychange", () => {
+    if (document.hidden) saveProgress(true);
+    else syncProgress();
+  });
+  window.addEventListener("pagehide", () => saveProgress(true));
+  window.addEventListener("pageshow", (event) => { if (event.persisted) syncProgress(); });
+  window.addEventListener("storage", (event) => { if ((event.key === SAVE_KEY || event.key === null) && !document.hidden) syncProgress(); });
+  document.addEventListener("scroll", () => {
+    clearTimeout(scrollSaveTimer);
+    scrollSaveTimer = setTimeout(() => saveProgress(), 150);
+  }, true);
+
   readRecord();
-  startRun();
+  let savedText = null;
+  try { savedText = localStorage.getItem(SAVE_KEY); lastSavedText = savedText; }
+  catch (error) { pauseSaving(error); }
+  if (!restoreProgress(savedText)) {
+    startRun();
+    if (!tutorialSeen) openTutorial();
+  }
 })();

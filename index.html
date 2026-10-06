@@ -7,8 +7,8 @@
   <meta name="description" content="Roll the dice. Defy the darkness. A turn-based dungeon adventure by Max.">
   <title>Dice Attack — Roll against the darkness</title>
   <link rel="icon" href="favicon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="style.css?v=7">
-  <script src="game.js?v=7" defer></script>
+  <link rel="stylesheet" href="style.css?v=8">
+  <script src="game.js?v=8" defer></script>
 </head>
 <body>
   <noscript><p style="padding: 24px; text-align: center;">Dice Attack needs JavaScript to roll the dice. Enable JavaScript in your browser to play.</p></noscript>
@@ -77,7 +77,7 @@
           <div><p class="eyebrow">FORTUNE IS IN YOUR HANDS</p><h2 id="phase-title">Make your own luck.</h2></div>
           <p class="phase-instruction" id="phase-instruction">Start with one attack die. Slay monsters to buy more.</p>
         </div>
-        <div class="tutorial-invite"><span>New to the dice?</span><button class="secondary-button" id="tutorial-button">Learn to play ↗</button></div>
+        <div class="tutorial-invite"><span>New to the dice?</span><button class="secondary-button" id="tutorial-button">Learn to play ↗</button><span class="save-status" id="save-status" role="status">AUTOSAVE READY</span></div>
         <div class="controls-layout">
           <div class="dice-panel">
             <div class="collection-heading"><span>YOUR DICE</span><b id="dice-count">1 / 6</b></div>
@@ -202,6 +202,7 @@
         <p><b>05 <strong>Keep your unused shield.</strong></b> Guard, Fortune, and Bloom add to your shield. Damage spends only the shield it needs: 6 shield against 2 damage leaves 4 for later turns. New shield stacks with stored shield. It does not expire each turn, but clears when you enter a new battle or shop. Your HP display shows remaining shield; the Shield summary previews stored plus newly rolled shield. You heal and attack first, poison ticks, then surviving monsters act. Enemy shields don't block Flame, Frost, or poison. Poison caps at 12 and loses 1 strength each turn. Frost weakens damage before your shield absorbs it. Monsters gain +1 damage every three turns. Frost Seal skips their next action.</p>
         <p><b>06 <strong>No two paths alike.</strong></b> Explore 31 rounds across the Whispering Wilds, Hollow Catacombs, Ember Throne, Frostglass Peaks, Sunken Kingdom, and Astral Rift. Each area has three random encounters, a chapter guardian, and a shop. After the last shop, face the Starless Sovereign on round 31. Complete 25 battles and six shop rounds to win. Chapter omens and merchant stock change each run. Your best record counts completed rounds, including shops. Reset between actions for a fresh run.</p>
       </div>
+      <p class="modal-description">Your run and tutorial step save automatically on this browser. Refreshing, closing the page, or switching tabs restores your dice, health, shields, gold, shop stock, and progress. Interrupted animations return to the last completed action, without spending or awarding anything twice. The tutorial pops up on your first visit; replay it with Learn to play. Reset run replaces the saved adventure. Saves are local to this browser, not shared across devices.</p>
       <p class="modal-footnote">Keyboard: 1–6 select dice · R reroll · Space roll / fight · Escape close instructions / cancel reset or sale</p>
       <button class="primary-button" id="help-play-button">Let fate decide <span class="button-arrow">↗</span></button>
     </section>
