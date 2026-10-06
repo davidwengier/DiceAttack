@@ -7,8 +7,8 @@
   <meta name="description" content="Roll the dice. Defy the darkness. A turn-based dungeon adventure by Max.">
   <title>Dice Attack — Roll against the darkness</title>
   <link rel="icon" href="favicon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="style.css?v=5">
-  <script src="game.js?v=5" defer></script>
+  <link rel="stylesheet" href="style.css?v=6">
+  <script src="game.js?v=6" defer></script>
 </head>
 <body>
   <noscript><p style="padding: 24px; text-align: center;">Dice Attack needs JavaScript to roll the dice. Enable JavaScript in your browser to play.</p></noscript>
@@ -77,6 +77,7 @@
           <div><p class="eyebrow">FORTUNE IS IN YOUR HANDS</p><h2 id="phase-title">Make your own luck.</h2></div>
           <p class="phase-instruction" id="phase-instruction">Start with one attack die. Slay monsters to buy more.</p>
         </div>
+        <div class="tutorial-invite"><span>New to the dice?</span><button class="secondary-button" id="tutorial-button">Learn to play ↗</button></div>
         <div class="controls-layout">
           <div class="dice-panel">
             <div class="collection-heading"><span>YOUR DICE</span><b id="dice-count">1 / 6</b></div>
@@ -87,7 +88,7 @@
           <div class="assignment-panel">
             <div class="action-slots">
               <div class="action-slot attack" id="summary-attack"><span class="action-symbol">⚔</span><span class="action-copy"><strong>Attack</strong><small>Hurt the monster</small></span><span class="action-value" id="attack-value">0</span><span class="slot-dice" id="attack-dice">ROLL TO REVEAL</span></div>
-              <div class="action-slot guard" id="summary-guard"><span class="action-symbol">⬡</span><span class="action-copy"><strong>Guard</strong><small>Block this turn</small></span><span class="action-value" id="guard-value">0</span><span class="slot-dice" id="guard-dice">ROLL TO REVEAL</span></div>
+              <div class="action-slot guard" id="summary-guard"><span class="action-symbol">⬡</span><span class="action-copy"><strong>Shield</strong><small>Save unused block</small></span><span class="action-value" id="guard-value">0</span><span class="slot-dice" id="guard-dice">ROLL TO REVEAL</span></div>
               <div class="action-slot mend" id="summary-mend"><span class="action-symbol">✚</span><span class="action-copy"><strong>Heal</strong><small>Restore health</small></span><span class="action-value" id="mend-value">0</span><span class="slot-dice" id="mend-dice">ROLL TO REVEAL</span></div>
             </div>
             <div class="special-effects" id="special-effects"></div>
@@ -164,17 +165,41 @@
       <p class="modal-footnote">New dice. New chances. Your next adventure awaits.</p>
     </section>
   </div>
+  <div class="overlay" id="tutorial-overlay" hidden>
+    <section class="modal tutorial-modal" role="dialog" aria-modal="true" aria-labelledby="tutorial-title" aria-describedby="tutorial-instruction" tabindex="-1">
+      <button class="close-button secondary-button" id="close-tutorial" aria-label="Exit practice and resume your unchanged run">Exit ↗</button>
+      <p class="eyebrow">SAFE PRACTICE · YOUR RUN IS PAUSED</p>
+      <h2 id="tutorial-title">Learn by rolling.</h2>
+      <div class="tutorial-progress" id="tutorial-progress" role="img" aria-label="Step 1 of 10"></div>
+      <p class="tutorial-instruction" id="tutorial-instruction" aria-live="polite"></p>
+      <div class="practice-arena" id="practice-arena">
+        <div class="practice-scene" id="practice-scene" aria-hidden="true"></div>
+        <div class="practice-fighter"><strong>You</strong><span id="practice-player-stat"></span><div class="practice-avatar" id="practice-hero-art" aria-hidden="true"></div></div>
+        <span class="practice-versus" aria-hidden="true">VS</span>
+        <div class="practice-fighter"><strong>Practice Slime</strong><span id="practice-enemy-stat"></span><div class="practice-avatar" id="practice-enemy-art" aria-hidden="true"></div></div>
+        <p id="practice-intent"></p>
+      </div>
+      <div class="practice-dice" id="practice-dice" aria-label="Practice dice"></div>
+      <div class="practice-shop" id="practice-shop" hidden>
+        <p class="eyebrow">SHOP-ONLY ROUND · PRACTICE MARKET</p>
+        <p id="practice-purse"></p>
+        <button class="shop-card type-guard" id="practice-buy"><span class="shop-card-icon">⬡</span><h3>Base Guard Die</h3><p>Add lasting shield every turn. Keep the shield you don't spend.</p><span class="shop-price" id="practice-buy-label">BUY GUARD · 14 GOLD</span></button>
+      </div>
+      <div class="tutorial-actions"><span>Your real run is untouched.<br>Escape exits practice.</span><button class="primary-button" id="tutorial-action">Roll practice dice ↗</button></div>
+    </section>
+  </div>
   <div class="overlay" id="help-overlay" hidden>
     <section class="modal help-modal" role="dialog" aria-modal="true" aria-labelledby="help-title" tabindex="-1">
       <button class="close-button icon-button" id="close-help" aria-label="Close instructions">×</button>
       <p class="eyebrow">A LITTLE KNOWLEDGE. A LITTLE LUCK.</p>
       <h2 id="help-title">How to defy the darkness.</h2>
+      <button class="primary-button" id="start-tutorial">Try the interactive tutorial ↗</button>
       <div class="help-steps">
         <p><b>01 <strong>One die. Endless possibilities.</strong></b> Start with one Base Attack die. Roll your whole collection each turn; each die automatically performs its own effect. Duplicate dice each roll separately. Select a rolled die to reroll it. You get one reroll each turn, or two with the Lucky Fingers skill.</p>
         <p><b>02 <strong>Build your collection.</strong></b> Attack dice deal their value as damage, with +3 on a six. Guard blocks; Heal restores health. Venom adds poison, Flame ignores shields, Blood attacks and heals, and Fortune earns gold and blocks. Frost deals half its value, rounded up, through shields and reduces enemy damage by that half-value for this turn. Lightning strikes twice on natural 5s and 6s. Bloom heals half its value, rounded up, and blocks half, rounded down. Hover or select a die for its exact effect.</p>
         <p><b>03 <strong>Choose your dice variants.</strong></b> Every type comes in six materials: Base, Gold +2, Diamond +4, Ruby +6, Emerald +8, and Obsidian +10. Bonuses apply before calculating all effects, including half-roll effects. Criticals and Lightning double strikes depend on the natural roll, not the bonus. Open Rare materials in a shop card to see Ruby, Emerald, and Obsidian.</p>
         <p><b>04 <strong>Spend your spoils.</strong></b> Every kill opens an animated reward screen showing your gold and health recovery (up to 8 health, improved by skills and omens). Press Continue when ready. Rounds 5, 10, 15, 20, 25, and 30 are shops only: no enemy and no combat. Buy multiple copies, up to six dice total. Every shop stocks a Frost, Lightning, or Bloom die. In My dice, sell copies for half their purchase price, rounded down. The free starter refunds 0. Keep at least one damage-dealing die. Abilities refresh each battle; skills last the run. You can also buy healing or refresh stock once per shop.</p>
-        <p><b>05 <strong>Read your enemy.</strong></b> You heal and attack first, poison then ticks, and surviving monsters act. Shields block normal damage, not Flame, Frost, or poison. Poison stacks up to 12 and loses 1 strength each turn. Monsters gain +1 damage every three turns. Frost reduces damage before your guard blocks it, and wears off after this turn. Frost Seal skips the enemy's next action.</p>
+        <p><b>05 <strong>Keep your unused shield.</strong></b> Guard, Fortune, and Bloom add to your shield. Damage spends only the shield it needs: 6 shield against 2 damage leaves 4 for later turns. New shield stacks with stored shield. It does not expire each turn, but clears when you enter a new battle or shop. Your HP display shows remaining shield; the Shield summary previews stored plus newly rolled shield. You heal and attack first, poison ticks, then surviving monsters act. Enemy shields don't block Flame, Frost, or poison. Poison caps at 12 and loses 1 strength each turn. Frost weakens damage before your shield absorbs it. Monsters gain +1 damage every three turns. Frost Seal skips their next action.</p>
         <p><b>06 <strong>No two paths alike.</strong></b> Explore 31 rounds across the Whispering Wilds, Hollow Catacombs, Ember Throne, Frostglass Peaks, Sunken Kingdom, and Astral Rift. Each area has three random encounters, a chapter guardian, and a shop. After the last shop, face the Starless Sovereign on round 31. Complete 25 battles and six shop rounds to win. Chapter omens and merchant stock change each run. Your best record counts completed rounds, including shops. Reset between actions for a fresh run.</p>
       </div>
       <p class="modal-footnote">Keyboard: 1–6 select dice · R reroll · Space roll / fight · Escape close instructions / cancel reset or sale</p>

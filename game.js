@@ -17,15 +17,15 @@
   };
   const diceTypes = {
     attack: { name: "Attack Die", label: "ATTACK", icon: "⚔", price: 18, offensive: true, text: "Deal your roll as damage. Sixes add +3 critical damage, improved by Loaded Fate." },
-    guard: { name: "Guard Die", label: "GUARD", icon: "⬡", price: 14, text: "Block your roll's worth of damage this turn. Moonward adds +1 per level." },
+    guard: { name: "Guard Die", label: "GUARD", icon: "⬡", price: 14, text: "Gain your roll's worth of shield. Unused shield lasts until spent or the battle ends. Moonward adds +1 per level." },
     mend: { name: "Heal Die", label: "HEAL", icon: "✚", price: 16, text: "Restore your roll's worth of health. Lifebloom adds +1 per level." },
     venom: { name: "Venom Die", label: "VENOM", icon: "❧", price: 22, offensive: true, text: "Add half your roll, rounded up, as poison. Poison bypasses shields and ticks before the enemy acts." },
     flame: { name: "Flame Die", label: "FLAME", icon: "✦", price: 26, offensive: true, text: "Deal your roll +2 damage, ignoring shields. Ember Edge also increases this damage." },
     blood: { name: "Blood Die", label: "BLOOD", icon: "♡", price: 28, offensive: true, text: "Deal your roll as damage and restore half your roll, rounded up. Attack and healing skills both help." },
-    fortune: { name: "Fortune Die", label: "FORTUNE", icon: "◈", price: 18, text: "Earn your roll in gold and block half your roll, rounded up. Moonward improves the block." },
+    fortune: { name: "Fortune Die", label: "FORTUNE", icon: "◈", price: 18, text: "Earn your roll in gold and gain half your roll, rounded up, as lasting shield. Moonward improves the shield." },
     frost: { name: "Frost Die", label: "FROST", icon: "❄", price: 28, offensive: true, text: "Deal half your roll, rounded up, as piercing damage. Reduce the enemy's damage by that half-roll this turn. Ember Edge improves your damage." },
     lightning: { name: "Lightning Die", label: "LIGHTNING", icon: "ϟ", price: 30, offensive: true, text: "Deal your roll as damage. Natural rolls of 5 or 6 strike twice! Ember Edge applies to each strike." },
-    bloom: { name: "Bloom Die", label: "BLOOM", icon: "❀", price: 24, text: "Heal half your roll, rounded up, and block half, rounded down. Both healing and guard skills improve it." }
+    bloom: { name: "Bloom Die", label: "BLOOM", icon: "❀", price: 24, text: "Heal half your roll, rounded up, and gain half, rounded down, as lasting shield. Healing and guard skills improve it." }
   };
   const abilities = {
     fireball: { name: "Ember Bolt", icon: "✦", price: 24, text: "Deal 10 damage ignoring shields. One free cast per battle." },
@@ -34,7 +34,7 @@
   };
   const skills = {
     power: { name: "Ember Edge", icon: "⚔", price: 14, max: 3, text: "+1 damage per Attack, Blood, Flame, Frost, and Lightning strike.", apply: () => { state.power++; } },
-    ward: { name: "Moonward", icon: "⬡", price: 12, max: 3, text: "+1 block per Guard, Fortune, and Bloom die.", apply: () => { state.ward++; } },
+    ward: { name: "Moonward", icon: "⬡", price: 12, max: 3, text: "+1 shield per Guard, Fortune, and Bloom die.", apply: () => { state.ward++; } },
     healing: { name: "Lifebloom", icon: "✚", price: 12, max: 3, text: "+1 healing per Heal, Blood, and Bloom die.", apply: () => { state.healing++; } },
     vitality: { name: "Lionheart", icon: "♡", price: 16, max: 3, text: "+8 maximum health and restore 8 health now.", apply: () => { state.maxHp += 8; state.hp = Math.min(state.maxHp, state.hp + 8); } },
     critical: { name: "Loaded Fate", icon: "✦", price: 14, max: 3, text: "+2 extra damage on Attack rolls of six.", apply: () => { state.critBonus += 2; } },
@@ -99,7 +99,7 @@
   const omens = [
     { name: "Gilded Skies", text: "+4 gold from every kill", gold: 4 },
     { name: "Lifebloom Mist", text: "+1 healing from Heal, Blood, and Bloom dice", healing: 1 },
-    { name: "Iron Moon", text: "+1 block from Guard, Fortune, and Bloom dice", ward: 1 },
+    { name: "Iron Moon", text: "+1 shield from Guard, Fortune, and Bloom dice", ward: 1 },
     { name: "Ember Stars", text: "+1 damage from Attack, Blood, Flame, Frost, and Lightning strikes", power: 1 },
     { name: "Lucky Constellation", text: "+2 critical damage on Attack sixes", critical: 2 },
     { name: "Gentle Rain", text: "+4 health recovered after each victory", recovery: 4 }
@@ -146,6 +146,8 @@
   let audio;
   let helpReturnFocus;
   let resetReturnFocus;
+  let practice = null;
+  let practiceReturnFocus;
   let runSerial = 0;
   let toastTimer;
   const wait = (ms) => new Promise((resolve) => setTimeout(resolve, reducedMotion ? Math.min(ms, 25) : ms));
@@ -497,16 +499,18 @@
 
   function startRun() {
     clearInfoToast();
+    practice = null;
+    $("practice-dice").replaceChildren();
     state = {
       id: ++runSerial, code: Math.random().toString(36).slice(2, 6).padEnd(4, "0").toUpperCase(),
       encounters: generateRun(), omens: shuffle(omens),
       phase: "ready", encounter: 0, completed: 0, defeated: 0, reward: null, turn: 1, gold: 0,
-      hp: 40, maxHp: 40, power: 0, ward: 0, healing: 0, critBonus: 3, recovery: 0,
+      hp: 40, maxHp: 40, shield: 0, power: 0, ward: 0, healing: 0, critBonus: 3, recovery: 0,
       extraRerolls: 0, lootBonus: 0, collection: [{ id: 1, type: "attack", tier: "base", paidPrice: 0 }], nextDieId: 2, pendingSale: null, dice: [],
       selected: null, rerolls: 1, enemy: null, abilities: [], usedAbilities: new Set(), skills: {},
       stats: { rolls: 0, damage: 0, criticals: 0, earned: 0 }, stock: [], shopFilter: "all", refreshed: false, expandedOffers: new Set()
     };
-    ["shop-overlay", "reward-overlay", "sell-overlay", "end-overlay", "reset-overlay", "help-overlay"].forEach((id) => { $(id).hidden = true; });
+    ["shop-overlay", "reward-overlay", "sell-overlay", "end-overlay", "reset-overlay", "help-overlay", "tutorial-overlay"].forEach((id) => { $(id).hidden = true; });
     $("hero-art").className = "character-art";
     $("hero-art").innerHTML = heroArtwork();
     $("hero-effects").replaceChildren();
@@ -518,6 +522,7 @@
 
   function loadEncounter() {
     const definition = state.encounters[state.encounter];
+    state.shield = 0;
     if (definition.kind === "shop") { openShop(); return; }
     state.enemy = { ...definition, maxHp: definition.hp, shield: 0, poison: 0, frozen: false };
     state.phase = "ready";
@@ -588,13 +593,19 @@
     state.stats.earned += amount;
   }
 
+  function absorbDamage(shield, incoming) {
+    const blocked = Math.min(shield, incoming);
+    return { blocked, damage: incoming - blocked, shield: shield - blocked };
+  }
+
   function render() {
     const enemy = state.enemy;
     const intent = getIntent();
     const app = document.querySelector(".app");
     app.hidden = state.phase === "shop";
-    app.inert = ["victory", "shop", "won", "lost"].includes(state.phase);
-    $("hero-hp").innerHTML = `${state.hp} <small>/ ${state.maxHp}</small>`;
+    app.inert = Boolean(practice) || ["victory", "shop", "won", "lost"].includes(state.phase);
+    $("hero-hp").innerHTML = `${state.hp} <small>/ ${state.maxHp}</small><span class="hero-shield" id="hero-shield" title="Unused shield carries between turns and clears when this battle ends." aria-label="${state.shield} shield remaining"${state.shield ? "" : " hidden"}> · ⬡ <b>${state.shield}</b></span>`;
+    $("ward-aura").classList.toggle("visible", state.shield > 0);
     $("enemy-hp").innerHTML = `${enemy.hp} <small>/ ${enemy.maxHp}${enemy.shield ? ` · ⬡ ${enemy.shield}` : ""}</small>`;
     $("hero-health-fill").style.width = `${state.hp / state.maxHp * 100}%`;
     $("enemy-health-fill").style.width = `${enemy.hp / enemy.maxHp * 100}%`;
@@ -622,15 +633,17 @@
     renderDice();
     const values = totals();
     ["attack", "guard", "mend"].forEach((action) => {
-      const value = action === "attack" ? values.attack + values.pierce : values[action];
+      const value = action === "attack" ? values.attack + values.pierce : action === "guard" ? state.shield + (["rolling", "rolled"].includes(phase) ? values.guard : 0) : values[action];
       $(`${action}-value`).textContent = value;
-      $(`${action}-dice`).textContent = phase === "ready" ? "ROLL TO REVEAL" : action === "attack" && values.criticals ? `${values.criticals} CRITICAL ${values.criticals === 1 ? "DIE" : "DICE"}` : value ? "AUTOMATIC EFFECT" : "NO CONTRIBUTION";
+      $(`${action}-dice`).textContent = action === "guard" && value ? `${state.shield} STORED${phase === "rolled" && values.guard ? ` · +${values.guard} NEW` : ""}` : phase === "ready" ? "ROLL TO REVEAL" : action === "attack" && values.criticals ? `${values.criticals} CRITICAL ${values.criticals === 1 ? "DIE" : "DICE"}` : value ? "AUTOMATIC EFFECT" : "NO CONTRIBUTION";
       $(`${action}-dice`).classList.toggle("has-dice", value > 0);
       $(`summary-${action}`).classList.toggle("active", value > 0);
     });
     $("special-effects").innerHTML = `${values.pierce ? `<span>✦ ${values.pierce} piercing damage</span>` : ""}${values.poison ? `<span>❧ +${values.poison} poison</span>` : ""}${values.gold ? `<span>◈ +${values.gold} gold</span>` : ""}${values.chill ? `<span>❄ −${values.chill} enemy damage</span>` : ""}${values.chains ? `<span>ϟ ${values.chains} double ${values.chains === 1 ? "strike" : "strikes"}</span>` : ""}`;
     $("main-button").disabled = !["ready", "rolled"].includes(phase);
     $("reset-button").disabled = ["rolling", "resolving", "victory"].includes(phase);
+    $("tutorial-button").disabled = !["ready", "rolled"].includes(phase);
+    $("start-tutorial").disabled = !["ready", "rolled"].includes(phase);
     $("main-button-text").textContent = phase === "ready" ? state.collection.length === 1 ? "Roll your die" : "Roll your dice" : phase === "rolling" ? "Rolling…" : phase === "resolving" ? "Fighting…" : phase === "rolled" ? "Make your move" : "Battle complete";
     $("reroll-button").disabled = phase !== "rolled" || !state.rerolls || state.selected === null;
     $("reroll-button").innerHTML = `↻ Reroll selected <span>${state.rerolls} left</span>`;
@@ -639,7 +652,7 @@
     $("die-description").textContent = state.selected !== null ? dieDescription(state.dice[state.selected]) : "Six materials, ten effects. Find rare dice and sell old ones at the shop.";
     $("phase-title").textContent = phase === "ready" ? "Make your own luck." : phase === "rolled" ? "Your collection. Your destiny." : phase === "rolling" ? "Let fortune fall." : phase === "resolving" ? "Your fate unfolds." : phase === "lost" ? "The dice will roll again." : "Fortune favors the brave.";
     $("phase-instruction").textContent = phase === "rolled" ? "Your dice effects are ready. Reroll one, cast an ability, or make your move." : phase === "ready" ? `Roll ${state.collection.length === 1 ? "your die" : `your ${state.collection.length} specialized dice`}. Earn gold to grow your collection.` : phase === "rolling" ? "A little courage. A little luck." : phase === "resolving" ? "Your dice act first. A surviving monster strikes next." : "An expedition is only the beginning.";
-    const incoming = intent.kind === "guard" || enemy.frozen ? 0 : Math.max(0, intent.value - values.chill - values.guard);
+    const incoming = intent.kind === "guard" || enemy.frozen ? 0 : Math.max(0, intent.value - values.chill - state.shield - values.guard);
     const outgoing = Math.max(0, values.attack - enemy.shield) + values.pierce;
     const poison = Math.min(12, enemy.poison + values.poison);
     $("combat-preview").textContent = phase === "rolled" ? `${outgoing} damage${poison ? ` + ${poison} poison` : ""} · ${Math.min(values.mend, state.maxHp - state.hp)} healing · ${outgoing + poison >= enemy.hp ? "lethal — no counterattack!" : `${incoming} incoming damage`}` : "Each die keeps its own role. Attack sixes deal bonus damage.";
@@ -679,7 +692,7 @@
   }
 
   function selectDie(index) {
-    if (state.phase !== "rolled" || !state.dice[index]) return;
+    if (practice || state.phase !== "rolled" || !state.dice[index]) return;
     state.selected = index;
     render();
     $("dice-tray").children[index].focus({ preventScroll: true });
@@ -687,6 +700,7 @@
   }
 
   async function rollDice(reroll = false) {
+    if (practice) return;
     if (reroll ? state.phase !== "rolled" || !state.rerolls || state.selected === null : state.phase !== "ready") return;
     const run = state.id;
     const index = reroll ? state.selected : undefined;
@@ -739,12 +753,13 @@
   }
 
   async function resolveTurn() {
-    if (state.phase !== "rolled" || state.dice.length !== state.collection.length) return;
+    if (practice || state.phase !== "rolled" || state.dice.length !== state.collection.length) return;
     const run = state.id;
     state.phase = "resolving";
     const values = totals();
     const intent = getIntent();
     const enemy = state.enemy;
+    state.shield += values.guard;
     if (values.gold) {
       addGold(values.gold);
       log(`Fortune dice earn ${values.gold} gold.`);
@@ -763,7 +778,8 @@
       }
     }
     if (values.guard) {
-      $("ward-aura").classList.add("visible");
+      floatNumber("hero", `+${values.guard}`, "block", "SHIELD");
+      log(`Your dice add ${values.guard} shield. ${state.shield} shield is stored.`);
       playSound("block");
     }
     if (values.chill && intent.kind !== "guard" && !enemy.frozen) {
@@ -773,9 +789,10 @@
       animate("hero-art", "strike");
       await wait(300);
       if (state.id !== run) return;
-      const blocked = Math.min(enemy.shield, values.attack);
-      const damage = Math.min(enemy.hp, values.attack - blocked + values.pierce);
-      enemy.shield -= blocked;
+      const absorbed = absorbDamage(enemy.shield, values.attack);
+      const blocked = absorbed.blocked;
+      const damage = Math.min(enemy.hp, absorbed.damage + values.pierce);
+      enemy.shield = absorbed.shield;
       enemy.hp -= damage;
       state.stats.damage += damage;
       state.stats.criticals += values.criticals;
@@ -824,8 +841,10 @@
       await wait(300);
       if (state.id !== run) return;
       const weakened = Math.max(0, intent.value - values.chill);
-      const blocked = Math.min(values.guard, weakened);
-      const damage = Math.min(state.hp, Math.max(0, weakened - values.guard));
+      const absorbed = absorbDamage(state.shield, weakened);
+      const blocked = absorbed.blocked;
+      const damage = Math.min(state.hp, absorbed.damage);
+      state.shield = absorbed.shield;
       state.hp -= damage;
       if (damage) {
         floatNumber("hero", `−${damage}`);
@@ -836,7 +855,7 @@
         floatNumber("hero", "BLOCK", "block", "GUARDED");
         playSound("block");
       }
-      log(`${enemy.name} uses ${intent.name}: ${damage} damage${blocked ? `, ${blocked} blocked` : ""}${values.chill ? `, ${Math.min(values.chill, intent.value)} weakened by frost` : ""}.`);
+      log(`${enemy.name} uses ${intent.name}: ${damage} damage${blocked ? `, ${blocked} absorbed (${state.shield} shield remains)` : ""}${values.chill ? `, ${Math.min(values.chill, intent.value)} weakened by frost` : ""}.`);
       render();
       await wait(650);
       if (state.id !== run) return;
@@ -852,7 +871,6 @@
         }
       }
     }
-    $("ward-aura").classList.remove("visible");
     if (state.hp <= 0) {
       state.phase = "lost";
       $("hero-art").classList.add("defeated");
@@ -1115,7 +1133,7 @@
   }
 
   async function castAbility(key) {
-    if (!state.abilities.includes(key) || state.usedAbilities.has(key) || !["ready", "rolled"].includes(state.phase)) return;
+    if (practice || !state.abilities.includes(key) || state.usedAbilities.has(key) || !["ready", "rolled"].includes(state.phase)) return;
     if (key === "salve" && state.hp === state.maxHp) return;
     const run = state.id;
     const previousPhase = state.phase;
@@ -1163,10 +1181,115 @@
     $("restart-button").focus({ preventScroll: true });
   }
 
+  const tutorialSteps = [
+    { title: "Roll your practice dice.", text: "Borrow an Attack, Guard, and Heal die. Practice rolls are fixed so you can learn safely. Your real run is paused and won't change.", action: "roll", button: "Roll practice dice ↗" },
+    { title: "Choose a die to improve.", text: "Attack rolled 3, Guard rolled 6, and Heal rolled 2. Click the highlighted Attack die to select it. Each role acts automatically.", action: "select", button: "Select the Attack die above" },
+    { title: "Give luck another chance.", text: "Reroll the selected Attack die. In a real battle, you get one reroll per turn unless you buy Lucky Fingers.", action: "reroll", button: "Reroll Attack ↻" },
+    { title: "Make your first move.", text: "Your natural 6 deals 9 damage, including a +3 critical. The slime has 2 shield. Your Heal restores 2 health, and Guard adds 6 shield before it hits for 2.", action: "fight", button: "Make your move ↗" },
+    { title: "Your shield didn't disappear!", text: "6 shield absorbed the slime's 2 damage, leaving 4 shield. Your health stayed safe. Unused shield carries over between turns, just like enemy shields.", action: "next", button: "Roll the next turn ↗" },
+    { title: "Block without another Guard roll.", text: "This turn you only rolled Attack. You still have 4 shield from last turn. Strike again and let your stored shield absorb the next 2 damage.", action: "fight", button: "Attack with stored shield ↗" },
+    { title: "Finish the fight.", text: "Your shield went from 4 to 2, with no health lost. The slime has 4 health left. Roll one last Attack to defeat it before it can hit again.", action: "finish", button: "Finish the slime ↗" },
+    { title: "Claim your victory spoils.", text: "Enemies don't counterattack after they die. Collect 24 practice gold and recover 8 health. Shields belong to one battle, so they clear before the next encounter.", action: "collect", button: "Collect practice rewards ↗" },
+    { title: "Build a stronger collection.", text: "Every fifth round is a shop, not a fight. Spend 14 of your practice gold on a Guard die. In real runs you start with one Attack die and buy the others.", action: "buy", button: "Buy the Guard die above" },
+    { title: "You're ready to defy the darkness.", text: "Roll, reroll, and make your move. Save unused shield, collect spoils, and upgrade at the shop. Your actual dice, gold, health, progress, and record are exactly as you left them.", action: "done", button: "Return to my run ↗" }
+  ];
+
+  function openTutorial() {
+    if (!["ready", "rolled"].includes(state.phase) || !$("reset-overlay").hidden || practice) return;
+    practiceReturnFocus = document.activeElement;
+    closeHelp(false);
+    practice = { step: 0, busy: false, action: null, hp: 30, shield: 0, enemyHp: 20, enemyShield: 2, gold: 0, owned: 1, dice: [] };
+    $("practice-scene").innerHTML = sceneArtwork(0);
+    $("practice-hero-art").innerHTML = heroArtwork();
+    $("practice-enemy-art").innerHTML = slimeArtwork({ color: "#8acb86" });
+    $("tutorial-overlay").hidden = false;
+    $("tutorial-overlay").querySelector(".modal").scrollTop = 0;
+    render();
+    renderTutorial();
+  }
+
+  function closeTutorial(restoreFocus = true) {
+    if (!practice) return;
+    practice = null;
+    $("tutorial-overlay").hidden = true;
+    $("practice-dice").replaceChildren();
+    render();
+    if (restoreFocus) {
+      const target = practiceReturnFocus?.isConnected && !practiceReturnFocus.disabled && practiceReturnFocus.getClientRects().length ? practiceReturnFocus : $("help-button");
+      target.focus({ preventScroll: true });
+    }
+  }
+
+  function renderTutorial() {
+    if (!practice) return;
+    const step = tutorialSteps[practice.step];
+    $("tutorial-title").textContent = step.title;
+    $("tutorial-instruction").textContent = step.text;
+    $("tutorial-progress").innerHTML = tutorialSteps.map((item, i) => `<span class="${i < practice.step ? "complete" : i === practice.step ? "current" : ""}" aria-hidden="true"></span>`).join("");
+    $("tutorial-progress").setAttribute("aria-label", `Step ${practice.step + 1} of ${tutorialSteps.length}`);
+    $("practice-player-stat").textContent = `${practice.hp} / 40 HP · ⬡ ${practice.shield} shield`;
+    $("practice-enemy-stat").textContent = `${practice.enemyHp} / 20 HP · ⬡ ${practice.enemyShield} shield`;
+    $("practice-intent").textContent = practice.enemyHp ? "SLIME INTENT · 2 DAMAGE" : "SLIME DEFEATED · NO COUNTERATTACK";
+    $("practice-arena").hidden = practice.step >= 8;
+    $("practice-arena").classList.toggle("practice-motion", practice.busy && ["fight", "finish"].includes(practice.action));
+    $("practice-dice").hidden = practice.step >= 8;
+    const dice = practice.dice.length ? practice.dice : ["attack", "guard", "mend"].map((type) => ({ type, tier: "base", value: 6 }));
+    const rolling = practice.busy && ["roll", "reroll", "next", "finish"].includes(practice.action);
+    $("practice-dice").innerHTML = dice.map((die, i) => `<button class="die type-${die.type} tier-base${rolling ? " rolling" : ""}${!practice.dice.length ? " unrolled" : ""}${practice.step === 1 && i === 0 ? " tutorial-target" : ""}${practice.step === 2 && i === 0 ? " selected" : ""}" data-practice-die="${i}" aria-label="${diceTypes[die.type].name}${practice.dice.length ? `: rolled ${die.value}` : ": not rolled"}"${practice.step !== 1 || i !== 0 || practice.busy ? " disabled" : ""}>${dieMarkup(die.value)}<span class="die-assignment" aria-hidden="true">${diceTypes[die.type].icon}</span><span class="die-type-label" aria-hidden="true">${diceTypes[die.type].label}</span></button>`).join("");
+    $("practice-shop").hidden = practice.step < 8;
+    $("practice-purse").textContent = `◈ ${practice.gold} practice gold · ${practice.owned} / ${MAX_DICE} dice`;
+    $("practice-buy").disabled = practice.step !== 8 || practice.busy;
+    $("practice-buy").classList.toggle("tutorial-target", practice.step === 8);
+    $("practice-buy-label").textContent = practice.step === 9 ? "PURCHASED · 14 GOLD" : "BUY GUARD · 14 GOLD";
+    $("tutorial-action").textContent = practice.busy ? "Practicing…" : step.button;
+    $("tutorial-action").disabled = practice.busy || ["select", "buy"].includes(step.action);
+    const target = practice.busy ? $("tutorial-overlay").querySelector(".modal") : practice.step === 1 ? $("practice-dice").querySelector("button") : practice.step === 8 ? $("practice-buy") : $("tutorial-action");
+    target.focus({ preventScroll: true });
+  }
+
+  function selectPracticeDie(index) {
+    if (!practice || practice.busy || practice.step !== 1 || index !== 0) return;
+    practice.step = 2;
+    renderTutorial();
+    playSound("select");
+  }
+
+  async function practiceAction(action) {
+    if (!practice || practice.busy || action !== tutorialSteps[practice.step].action || action === "select") return;
+    if (action === "done") { closeTutorial(); return; }
+    const session = practice;
+    session.busy = true;
+    session.action = action;
+    renderTutorial();
+    playSound(["roll", "reroll", "next", "finish"].includes(action) ? "roll" : action === "collect" || action === "buy" ? "heal" : "hit");
+    await wait(500);
+    if (practice !== session) return;
+    if (action === "roll") session.dice = ["attack", "guard", "mend"].map((type, i) => ({ type, tier: "base", value: [3, 6, 2][i] }));
+    else if (action === "reroll") session.dice[0].value = 6;
+    else if (action === "next") session.dice = [{ type: "attack", tier: "base", value: 6 }];
+    else if (action === "fight" || action === "finish") {
+      if (session.step === 3) { session.hp = Math.min(40, session.hp + 2); session.shield += 6; }
+      const strike = absorbDamage(session.enemyShield, session.dice[0].value + 3);
+      session.enemyShield = strike.shield;
+      session.enemyHp = Math.max(0, session.enemyHp - strike.damage);
+      if (session.enemyHp) {
+        const retaliation = absorbDamage(session.shield, 2);
+        session.shield = retaliation.shield;
+        session.hp -= retaliation.damage;
+      }
+    } else if (action === "collect") { session.gold += 24; session.hp = Math.min(40, session.hp + 8); session.shield = 0; }
+    else if (action === "buy") { session.gold -= 14; session.owned++; }
+    session.busy = false;
+    session.action = null;
+    session.step++;
+    renderTutorial();
+  }
+
   function openHelp() {
-    if (!$("shop-overlay").hidden || !$("end-overlay").hidden || !$("reset-overlay").hidden || !$("sell-overlay").hidden || !$("reward-overlay").hidden) return;
+    if (!$("shop-overlay").hidden || !$("end-overlay").hidden || !$("reset-overlay").hidden || !$("sell-overlay").hidden || !$("reward-overlay").hidden || practice) return;
     helpReturnFocus = document.activeElement;
     $("help-overlay").hidden = false;
+    $("help-overlay").querySelector(".modal").scrollTop = 0;
     $("close-help").focus({ preventScroll: true });
   }
 
@@ -1180,7 +1303,7 @@
   }
 
   function openReset() {
-    if (["rolling", "resolving", "victory"].includes(state.phase)) return;
+    if (practice || ["rolling", "resolving", "victory"].includes(state.phase)) return;
     closeHelp(false);
     closeSale(false);
     resetReturnFocus = document.activeElement;
@@ -1269,14 +1392,28 @@
     if (soundEnabled) playSound("select");
   });
   $("help-button").addEventListener("click", openHelp);
+  $("tutorial-button").addEventListener("click", openTutorial);
+  $("start-tutorial").addEventListener("click", openTutorial);
+  $("close-tutorial").addEventListener("click", () => closeTutorial());
+  $("tutorial-action").addEventListener("click", () => { if (practice) void practiceAction(tutorialSteps[practice.step].action); });
+  $("practice-buy").addEventListener("click", () => { void practiceAction("buy"); });
+  $("practice-dice").addEventListener("click", (event) => {
+    const die = event.target.closest("[data-practice-die]");
+    if (die) selectPracticeDie(Number(die.dataset.practiceDie));
+  });
   $("close-help").addEventListener("click", () => closeHelp());
   $("help-play-button").addEventListener("click", () => closeHelp());
   $("help-overlay").addEventListener("click", (event) => {
     if (event.target === $("help-overlay")) closeHelp();
   });
   document.addEventListener("keydown", (event) => {
-    const overlay = ["reset-overlay", "sell-overlay", "reward-overlay", "help-overlay", "shop-overlay", "end-overlay"].map($).find((element) => !element.hidden);
+    const overlay = ["reset-overlay", "sell-overlay", "reward-overlay", "tutorial-overlay", "help-overlay", "shop-overlay", "end-overlay"].map($).find((element) => !element.hidden);
     if (overlay) {
+      if (overlay.id === "tutorial-overlay") {
+        if (event.key === "Escape") { event.preventDefault(); closeTutorial(); return; }
+        if (!event.repeat && !event.ctrlKey && !event.metaKey && !event.altKey && event.key === "1") { event.preventDefault(); selectPracticeDie(0); return; }
+        if (!event.repeat && !event.ctrlKey && !event.metaKey && !event.altKey && event.key.toLowerCase() === "r") { event.preventDefault(); void practiceAction("reroll"); return; }
+      }
       if (event.key === "Escape" && overlay.id === "help-overlay") {
         event.preventDefault();
         closeHelp();

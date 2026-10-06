@@ -73,6 +73,8 @@ h1 { font: 600 clamp(20px, 2.5vw, 28px) "Cinzel", Georgia, serif; margin: 0; let
 .fighter-heading h2 { margin: 2px 0 0; font: 600 18px "Cinzel", Georgia, serif; color: #f1efe2; }
 .hp-number { margin-left: auto; font-size: 15px; font-weight: 700; color: #e6efe6; white-space: nowrap; }
 .hp-number small { font-size: 10px; font-weight: 500; color: #adbbab; }
+.hero-shield { color: #a8d8f0; font-size: .8em; }
+.hero-shield b { font-size: 1.2em; }
 .health-track { height: 6px; margin-top: 11px; border-radius: 4px; background: #040f1466; overflow: hidden; box-shadow: 0 0 0 1px #e3ffe612; }
 .health-fill { height: 100%; width: 100%; transition: width .5s cubic-bezier(.2,.8,.2,1); border-radius: inherit; position: relative; }
 .health-fill::after { content: ""; position: absolute; inset: 0; background: linear-gradient(0deg, transparent, #ffffff40); }
@@ -185,7 +187,7 @@ footer { display: flex; justify-content: space-between; gap: 10px; padding: 22px
 .run-stats { display: flex; justify-content: center; gap: 30px; margin: 27px 0; }
 .run-stat strong { display: block; font: 600 28px "Cinzel", Georgia, serif; color: var(--gold); }
 .run-stat span { display: block; font-size: 8px; letter-spacing: 1px; margin-top: 7px; color: #8ca4a8; }
-.help-modal { max-width: 650px; }
+.help-modal { max-width: 650px; max-height: calc(100dvh - 48px); overflow-y: auto; scrollbar-color: #637a79 #16262e; }
 .close-button { position: absolute; right: 17px; top: 15px; }
 .help-steps { text-align: left; margin-top: 25px; }
 .help-steps p { font-size: 12px; line-height: 1.8; color: #96aeb3; padding-bottom: 13px; border-bottom: 1px solid #ffffff0b; }
@@ -325,6 +327,36 @@ footer { display: flex; justify-content: space-between; gap: 10px; padding: 22px
 .health-spoils > span, .health-spoils strong { color: #b9e4c4; }
 .health-spoils small { color: #9abdac; }
 .spoils-modal .primary-button { margin: 20px auto 0; }
+.tutorial-invite { display: flex; align-items: center; gap: 12px; margin-top: 14px; font-size: 10px; color: #9fb6b6; }
+.tutorial-invite button { padding: 6px 10px; color: var(--gold); }
+.tutorial-modal { max-width: 680px; max-height: calc(100dvh - 48px); overflow-y: auto; padding: 26px 20px; scrollbar-color: #637a79 #16262e; }
+.tutorial-modal > .eyebrow { padding-right: 60px; font-size: 8px; }
+.tutorial-modal h2 { font-size: clamp(19px, 4vw, 27px); margin: 12px 0; }
+.tutorial-progress { display: flex; gap: 5px; margin: 17px 0; }
+.tutorial-progress span { flex: 1; height: 4px; border-radius: 3px; background: #819da033; }
+.tutorial-progress .complete { background: #83c8a2; }
+.tutorial-progress .current { background: var(--gold); box-shadow: 0 0 8px #e2c18044; }
+.tutorial-instruction { min-height: 60px; color: #b1c7c8; font-size: 12px; line-height: 1.8; }
+.practice-arena { display: grid; grid-template-columns: minmax(0, 1fr) 25px minmax(0, 1fr); position: relative; overflow: hidden; min-height: 190px; padding: 14px 8px 26px; border: 1px solid #91b8a340; border-radius: 10px; background: #162c32; }
+.practice-scene, .practice-scene > svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+.practice-scene { opacity: .65; }
+.practice-fighter, .practice-versus, #practice-intent { z-index: 1; }
+.practice-fighter { min-width: 0; display: flex; flex-direction: column; align-items: center; }
+.practice-fighter > strong { color: #e9e2c8; font: 600 13px "Cinzel", Georgia, serif; }
+.practice-fighter > span { color: #b2d5cf; font-size: 10px; margin-top: 6px; line-height: 1.6; }
+.practice-versus { align-self: center; color: #c0d0c277; font-size: 10px; }
+.practice-avatar { width: 120px; height: 116px; margin-top: 4px; }
+.practice-avatar > svg { width: 100%; height: 100%; }
+#practice-intent { position: absolute; bottom: 7px; left: 0; right: 0; margin: 0; font-size: 8px; color: #e7c9a6; letter-spacing: .7px; }
+.practice-motion #practice-enemy-art { animation: hit .5s ease-out; }
+.practice-dice { display: flex; flex-wrap: wrap; justify-content: center; gap: 22px; padding: 22px 0 51px; min-height: 143px; }
+.practice-dice .die { width: 60px; height: 60px; padding: 10px; }
+.tutorial-target { outline: 2px solid var(--gold); outline-offset: 5px; box-shadow: 0 0 23px #e2c18033; }
+.tutorial-actions { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; position: sticky; bottom: -26px; padding: 15px 0 8px; margin-top: 10px; border-top: 1px solid #99afb225; background: #14232df5; backdrop-filter: blur(8px); }
+.tutorial-actions > span { font-size: 9px; line-height: 1.7; color: #91aaa9; text-align: left; }
+.practice-shop { border: 1px solid #95b99d30; border-radius: 10px; padding: 18px; background: #0c1a2255; margin-top: 16px; }
+.practice-shop .shop-card { width: 100%; min-height: 0; margin: 16px auto 0; }
+#practice-purse { color: var(--gold); font-size: 13px; }
 @keyframes chest-arrive { from { opacity: 0; transform: translateY(24px) scale(.7); } to { opacity: 1; transform: none; } }
 @keyframes chest-open { from { transform: rotate(0); } to { transform: translateY(-14px) rotate(-14deg); } }
 @keyframes treasure-glow { from { opacity: 0; transform: scale(.5); } to { opacity: 1; transform: scale(1.1); } }
