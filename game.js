@@ -604,7 +604,7 @@
     const app = document.querySelector(".app");
     app.hidden = state.phase === "shop";
     app.inert = Boolean(practice) || ["victory", "shop", "won", "lost"].includes(state.phase);
-    $("hero-hp").innerHTML = `${state.hp} <small>/ ${state.maxHp}</small><span class="hero-shield" id="hero-shield" title="Unused shield carries between turns and clears when this battle ends." aria-label="${state.shield} shield remaining"${state.shield ? "" : " hidden"}> · ⬡ <b>${state.shield}</b></span>`;
+    $("hero-hp").innerHTML = `${state.hp} <small>/ ${state.maxHp}</small><span class="hero-shield" id="hero-shield-counter" title="Unused shield carries between turns and clears when this battle ends." aria-label="${state.shield} shield remaining"${state.shield ? "" : " hidden"}> · ⬡ <b>${state.shield}</b></span>`;
     $("ward-aura").classList.toggle("visible", state.shield > 0);
     $("enemy-hp").innerHTML = `${enemy.hp} <small>/ ${enemy.maxHp}${enemy.shield ? ` · ⬡ ${enemy.shield}` : ""}</small>`;
     $("hero-health-fill").style.width = `${state.hp / state.maxHp * 100}%`;
@@ -1194,14 +1194,18 @@
     { title: "You're ready to defy the darkness.", text: "Roll, reroll, and make your move. Save unused shield, collect spoils, and upgrade at the shop. Your actual dice, gold, health, progress, and record are exactly as you left them.", action: "done", button: "Return to my run ↗" }
   ];
 
+  function practiceArtwork(markup) {
+    return markup.replace(/id="([^"]+)"/g, (_, id) => `id="practice-${id}"`).replace(/url\(#([^)]+)\)/g, (_, id) => `url(#practice-${id})`);
+  }
+
   function openTutorial() {
     if (!["ready", "rolled"].includes(state.phase) || !$("reset-overlay").hidden || practice) return;
     practiceReturnFocus = document.activeElement;
     closeHelp(false);
     practice = { step: 0, busy: false, action: null, hp: 30, shield: 0, enemyHp: 20, enemyShield: 2, gold: 0, owned: 1, dice: [] };
-    $("practice-scene").innerHTML = sceneArtwork(0);
-    $("practice-hero-art").innerHTML = heroArtwork();
-    $("practice-enemy-art").innerHTML = slimeArtwork({ color: "#8acb86" });
+    $("practice-scene").innerHTML = practiceArtwork(sceneArtwork(0));
+    $("practice-hero-art").innerHTML = practiceArtwork(heroArtwork());
+    $("practice-enemy-art").innerHTML = practiceArtwork(slimeArtwork({ color: "#8acb86" }));
     $("tutorial-overlay").hidden = false;
     $("tutorial-overlay").querySelector(".modal").scrollTop = 0;
     render();
