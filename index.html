@@ -7,8 +7,8 @@
   <meta name="description" content="Roll the dice. Defy the darkness. A turn-based dungeon adventure by Max.">
   <title>Dice Attack — Roll against the darkness</title>
   <link rel="icon" href="favicon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="style.css?v=8">
-  <script src="game.js?v=8" defer></script>
+  <link rel="stylesheet" href="style.css?v=9">
+  <script src="game.js?v=9" defer></script>
 </head>
 <body>
   <noscript><p style="padding: 24px; text-align: center;">Dice Attack needs JavaScript to roll the dice. Enable JavaScript in your browser to play.</p></noscript>
@@ -47,7 +47,7 @@
         </div>
         <div class="combatants">
           <div class="fighter hero-fighter">
-            <div class="fighter-heading"><span class="portrait-icon">✦</span><div><span class="fighter-role">THE DICEBOUND</span><h2>You</h2></div><span class="hp-number" id="hero-hp">40 <small>/ 40</small></span></div>
+            <div class="fighter-heading"><span class="portrait-icon">✦</span><div><span class="fighter-role" id="hero-role">THE DICEBOUND</span><h2 id="hero-name">You</h2></div><span class="hp-number" id="hero-hp">40 <small>/ 40</small></span></div>
             <div class="health-track"><div id="hero-health-fill" class="health-fill hero-health"></div></div>
             <div class="character-stage" id="hero-stage">
               <div class="ground-shadow"></div>
@@ -70,6 +70,11 @@
           </div>
         </div>
         <div class="arena-bottom"><span id="flavor-text">Something stirs beneath the ancient trees.</span><span class="turn-counter" id="turn-counter">TURN 01</span></div>
+      </section>
+
+      <section class="formation-bar" aria-label="Party and enemy formation">
+        <div><div class="formation-heading"><h2>YOUR EXPEDITION</h2><span id="party-turn-label"></span></div><div class="party-roster" id="party-roster" aria-label="Choose a companion with a turn ready"></div></div>
+        <div><div class="formation-heading"><h2>ENEMY FORMATION</h2><span id="enemy-group-label"></span></div><div class="enemy-roster" id="enemy-roster" aria-label="Choose an enemy target"></div></div>
       </section>
 
       <section class="battle-console" aria-label="Dice and combat actions">
@@ -107,13 +112,15 @@
     <section class="modal shop-modal" role="dialog" aria-modal="true" aria-labelledby="shop-title" tabindex="-1">
       <div class="shop-heading"><div><p class="eyebrow" id="shop-eyebrow">A MOMENT OF RESPITE</p><h2 id="shop-title">The Wayfarer's Market</h2></div><span class="shop-purse" id="shop-purse"></span></div>
       <p class="modal-description" id="shop-description"></p>
+      <div class="party-roster shop-party" id="shop-party" aria-label="Choose who receives purchased dice and abilities"></div>
+      <p class="shop-recipient" id="shop-recipient"></p>
       <div class="shop-status" id="shop-status"></div>
       <div class="shop-tabs" id="shop-tabs" aria-label="Shop categories">
         <button data-filter="all" aria-pressed="true">All wares</button><button data-filter="dice" aria-pressed="false">Dice</button><button data-filter="ability" aria-pressed="false">Abilities</button><button data-filter="skill" aria-pressed="false">Skills</button><button data-filter="owned" aria-pressed="false">My dice</button>
       </div>
       <div class="shop-stock" id="shop-stock"></div>
       <div class="shop-utilities"><button class="secondary-button" id="refresh-shop">↻ New stock · 5 gold</button><button class="secondary-button" id="shop-rest">✚ Restore 12 HP · 8 gold</button></div>
-      <div class="shop-footer"><button class="reset-button" id="shop-reset">↻ Reset run</button><p>Six materials. Up to 6 dice.<br>Sell old dice in My dice to make room.</p><button class="primary-button" id="leave-shop">Venture onward <span class="button-arrow">↗</span></button></div>
+      <div class="shop-footer"><button class="reset-button" id="shop-reset">↻ Reset run</button><p>Six dice per companion.<br>Choose a member before buying or selling.</p><button class="primary-button" id="leave-shop">Venture onward <span class="button-arrow">↗</span></button></div>
     </section>
   </div>
   <div class="overlay" id="reward-overlay" hidden>
@@ -135,6 +142,7 @@
         <div class="spoils-item gold-spoils"><span>◈</span><strong id="reward-gold"></strong><small>GOLD EARNED</small></div>
         <div class="spoils-item health-spoils"><span>✚</span><strong id="reward-health"></strong><small>HEALTH RESTORED</small><p id="reward-health-note"></p></div>
       </div>
+      <div class="recruit-card" id="reward-recruit" hidden></div>
       <p class="modal-footnote" id="reward-wallet"></p>
       <button class="primary-button" id="reward-continue" disabled>Next round ↗</button>
     </section>
@@ -150,7 +158,7 @@
   <div class="overlay" id="reset-overlay" hidden>
     <section class="modal end-modal" role="dialog" aria-modal="true" aria-labelledby="reset-title" tabindex="-1">
       <div class="modal-emblem">↻</div><p class="eyebrow">A FRESH ROLL OF FATE</p><h2 id="reset-title">Begin a different run?</h2>
-      <p class="modal-description">Your current gold, dice, abilities, and skills will be lost. Your best record stays. A new path and new merchant wares await.</p>
+      <p class="modal-description">Your current party, gold, dice, abilities, and skills will be lost. Your best record stays. A new path and new companions await.</p>
       <div class="reset-actions"><button class="secondary-button" id="cancel-reset">Keep this run</button><button class="primary-button" id="confirm-reset">Reset expedition ↗</button></div>
     </section>
   </div>
@@ -170,7 +178,7 @@
       <button class="close-button secondary-button" id="close-tutorial" aria-label="Exit practice and resume your unchanged run">Exit ↗</button>
       <p class="eyebrow">SAFE PRACTICE · YOUR RUN IS PAUSED</p>
       <h2 id="tutorial-title">Learn by rolling.</h2>
-      <div class="tutorial-progress" id="tutorial-progress" role="img" aria-label="Step 1 of 10"></div>
+      <div class="tutorial-progress" id="tutorial-progress" role="img" aria-label="Step 1 of 14"></div>
       <p class="tutorial-instruction" id="tutorial-instruction" aria-live="polite"></p>
       <div class="practice-arena" id="practice-arena">
         <div class="practice-scene" id="practice-scene" aria-hidden="true"></div>
@@ -185,6 +193,8 @@
         <p id="practice-purse"></p>
         <button class="shop-card type-guard" id="practice-buy"><span class="shop-card-icon">⬡</span><h3>Base Guard Die</h3><p>Add lasting shield every turn. Keep the shield you don't spend.</p><span class="shop-price" id="practice-buy-label">BUY GUARD · 14 GOLD</span></button>
       </div>
+      <div class="practice-choices" id="practice-party" hidden><button class="secondary-button" disabled>⚔ You · turn complete</button><button class="party-card tutorial-target" data-practice-member="healer"><span class="party-portrait">✚</span><span><strong>Mira · Healer</strong><small>Own Blood die · turn ready</small></span></button></div>
+      <div class="practice-choices" id="practice-targets" hidden><button class="enemy-card" disabled><strong>Practice Wolf</strong><small>12 HP · shield 3</small></button><button class="enemy-card tutorial-target" data-practice-target="1"><strong>Practice Slime</strong><small>4 HP · no shield · choose me</small></button></div>
       <div class="tutorial-actions"><span>Your real run is untouched.<br>Escape exits practice.</span><button class="primary-button" id="tutorial-action">Roll practice dice ↗</button></div>
     </section>
   </div>
@@ -195,16 +205,34 @@
       <h2 id="help-title">How to defy the darkness.</h2>
       <button class="primary-button" id="start-tutorial">Try the interactive tutorial ↗</button>
       <div class="help-steps">
-        <p><b>01 <strong>One die. Endless possibilities.</strong></b> Start with one Base Attack die. Roll your whole collection each turn; each die automatically performs its own effect. Duplicate dice each roll separately. Select a rolled die to reroll it. You get one reroll each turn, or two with the Lucky Fingers skill.</p>
+        <p><b>01 <strong>Your party. Your turns.</strong></b> Start alone with one Base Attack die. Rescue Mira after the guardian on round 4, and Sol after round 9. Each companion has their own health, shields, dice, abilities, and rerolls. Roll and fight with each living member once; then every surviving enemy acts. You may choose any companion whose turn is ready before rolling. Downed companions cannot act, but recover after the whole battle is won. You lose only when the entire party falls.</p>
         <p><b>02 <strong>Build your collection.</strong></b> Attack dice deal their value as damage, with +3 on a six. Guard blocks; Heal restores health. Venom adds poison, Flame ignores shields, Blood attacks and heals, and Fortune earns gold and blocks. Frost deals half its value, rounded up, through shields and reduces enemy damage by that half-value for this turn. Lightning strikes twice on natural 5s and 6s. Bloom heals half its value, rounded up, and blocks half, rounded down. Hover or select a die for its exact effect.</p>
         <p><b>03 <strong>Choose your dice variants.</strong></b> Every type comes in six materials: Base, Gold +2, Diamond +4, Ruby +6, Emerald +8, and Obsidian +10. Bonuses apply before calculating all effects, including half-roll effects. Criticals and Lightning double strikes depend on the natural roll, not the bonus. Open Rare materials in a shop card to see Ruby, Emerald, and Obsidian.</p>
-        <p><b>04 <strong>Spend your spoils.</strong></b> Every kill opens an animated reward screen showing your gold and health recovery (up to 8 health, improved by skills and omens). Press Continue when ready. Rounds 5, 10, 15, 20, 25, and 30 are shops only: no enemy and no combat. Buy multiple copies, up to six dice total. Every shop stocks a Frost, Lightning, or Bloom die. In My dice, sell copies for half their purchase price, rounded down. The free starter refunds 0. Keep at least one damage-dealing die. Abilities refresh each battle; skills last the run. You can also buy healing or refresh stock once per shop.</p>
-        <p><b>05 <strong>Keep your unused shield.</strong></b> Guard, Fortune, and Bloom add to your shield. Damage spends only the shield it needs: 6 shield against 2 damage leaves 4 for later turns. New shield stacks with stored shield. It does not expire each turn, but clears when you enter a new battle or shop. Your HP display shows remaining shield; the Shield summary previews stored plus newly rolled shield. You heal and attack first, poison ticks, then surviving monsters act. Enemy shields don't block Flame, Frost, or poison. Poison caps at 12 and loses 1 strength each turn. Frost weakens damage before your shield absorbs it. Monsters gain +1 damage every three turns. Frost Seal skips their next action.</p>
-        <p><b>06 <strong>No two paths alike.</strong></b> Explore 31 rounds across the Whispering Wilds, Hollow Catacombs, Ember Throne, Frostglass Peaks, Sunken Kingdom, and Astral Rift. Each area has three random encounters, a chapter guardian, and a shop. After the last shop, face the Starless Sovereign on round 31. Complete 25 battles and six shop rounds to win. Chapter omens and merchant stock change each run. Your best record counts completed rounds, including shops. Reset between actions for a fresh run.</p>
+        <p><b>04 <strong>Equip every companion.</strong></b> Every kill shows its exact gold and capped recovery. A partial victory heals your most injured living ally; winning the whole battle heals everyone and revives downed members. Rounds 5, 10, 15, 20, 25, and 30 are shops only. Choose a companion in the shop before buying or selling their dice and abilities. Each can own up to six dice; duplicate dice roll separately. Skills benefit the entire party. Sell dice for half their purchase price, rounded down; each member must keep a damage-dealing die. Abilities reset each battle. You can also buy healing for the selected companion or refresh stock once.</p>
+        <p><b>05 <strong>Keep your unused shield.</strong></b> Each member stores their own shield. Damage spends only what it needs: 6 shield against 2 damage leaves 4. Guard, Fortune, and Bloom stack with stored shield, which clears at the next battle or shop. Poison ticks before each affected enemy acts, caps at 12, and loses 1 strength per tick. Flame, Frost, poison, and parry counters ignore enemy shields. Frost weakens the chosen enemy for its next action. Frost Seal skips that enemy's action. Enemies gain +1 damage every three full party rounds.</p>
+        <p><b>06 <strong>Read the whole battlefield.</strong></b> Early battles contain just one enemy. The catacombs introduce pairs; later areas feature groups of one to three. Click an enemy card to choose where attacks, poison, and offensive abilities land. Each enemy has separate health, shield, poison, and intent. Enemy cards show who will be attacked. Dead enemies never act; the round finishes only when the entire group is defeated. Mira heals the most injured living ally; Sol adds +2 damage per offensive die and starts with Frost Seal.</p>
+        <p><b>07 <strong>Dodge or risk a parry.</strong></b> Each enemy strike opens a reaction popup. Press Ready when prepared. The marker travels from left to right: press Dodge or D inside the broad blue window to avoid damage, or Parry or P inside the narrower gold window to avoid damage and counter for 4 + Ember Edge damage through armor. You get one attempt per strike. Early, late, or missed reactions take normal damage, with your stored shield still protecting you. Take the hit (or Escape) deliberately skips the reaction. Relaxed timing doubles the time available. Switching tabs pauses the timing meter.</p>
+        <p><b>08 <strong>No two paths alike.</strong></b> Explore 31 rounds across six illustrated areas. Each area has three random battles, a chapter guardian, and a shop. After the last market, face the Starless Sovereign and its escorts on round 31. Complete 25 battles and six shops to win. Your best record counts completed rounds, not individual kills. Reset between actions for a fresh adventure.</p>
       </div>
       <p class="modal-description">Your run and tutorial step save automatically on this browser. Refreshing, closing the page, or switching tabs restores your dice, health, shields, gold, shop stock, and progress. Interrupted animations return to the last completed action, without spending or awarding anything twice. The tutorial pops up on your first visit; replay it with Learn to play. Reset run replaces the saved adventure. Saves are local to this browser, not shared across devices.</p>
-      <p class="modal-footnote">Keyboard: 1–6 select dice · R reroll · Space roll / fight · Escape close instructions / cancel reset or sale</p>
+      <p class="modal-footnote">Keyboard: 1–6 select dice · R reroll · Space roll / fight · D dodge · P parry · Escape close dialogs (or take the hit during a reaction)</p>
       <button class="primary-button" id="help-play-button">Let fate decide <span class="button-arrow">↗</span></button>
+    </section>
+  </div>
+  <div class="overlay defense-overlay" id="defense-overlay" hidden>
+    <section class="modal defense-modal" role="dialog" aria-modal="true" aria-labelledby="defense-title" aria-describedby="defense-description" tabindex="-1">
+      <p class="eyebrow">A MOMENT CAN CHANGE YOUR FATE</p>
+      <div class="defense-emblem" aria-hidden="true">⚔</div>
+      <h2 id="defense-title">An enemy prepares to strike.</h2>
+      <p class="modal-description" id="defense-description"></p>
+      <div class="defense-meter" id="defense-meter" role="progressbar" aria-label="Strike timing" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><span class="dodge-window"></span><span class="parry-window"></span><span class="defense-marker" id="defense-marker"></span></div>
+      <div class="defense-legend"><span>BLUE · DODGE</span><span>GOLD · PARRY</span></div>
+      <p class="defense-status" id="defense-status" role="status"></p>
+      <label class="relaxed-timing"><input type="checkbox" id="defense-relaxed"> Relaxed timing · twice as long to react</label>
+      <button class="primary-button" id="defense-ready">Ready — start the strike ↗</button>
+      <div class="defense-actions"><button class="reaction-button dodge-button" id="defense-dodge" disabled><strong>DODGE</strong><span>D · wider window</span></button><button class="reaction-button parry-button" id="defense-parry" disabled><strong>PARRY</strong><span>P · block + counter</span></button></div>
+      <button class="secondary-button take-hit-button" id="defense-skip">Take the hit · shield still applies</button>
+      <p class="modal-footnote">One reaction per strike. The meter waits while your tab is hidden.</p>
     </section>
   </div>
   <div class="toast" id="toast" role="status" hidden></div>

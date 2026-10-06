@@ -32,13 +32,19 @@
     salve: { name: "Healing Spring", icon: "✚", price: 22, text: "Restore 14 health. One free cast per battle." },
     freeze: { name: "Frost Seal", icon: "❄", price: 26, text: "Freeze the enemy, skipping its next action. One free cast per battle." }
   };
+  const memberTypes = {
+    knight: { name: "You", title: "THE DICEBOUND", role: "Knight", icon: "⚔", hp: 40, die: "attack", ability: null, joins: 0, color: "#b2d1a0", perk: "Attack sixes deal critical damage." },
+    healer: { name: "Mira", title: "THE LIFEBLOOM", role: "Healer", icon: "✚", hp: 32, die: "blood", ability: "salve", joins: 4, color: "#a9dfc2", perk: "Her healing dice and Healing Spring mend the most injured living ally." },
+    mage: { name: "Sol", title: "THE STARWEAVER", role: "Mage", icon: "✦", hp: 28, die: "flame", ability: "freeze", joins: 9, color: "#c6b1ef", perk: "+2 damage per offensive die. Frost Seal freezes a chosen enemy." }
+  };
+  const MEMBER_FIELDS = ["hp", "maxHp", "shield", "collection", "dice", "selected", "rerolls", "abilities", "usedAbilities"];
   const skills = {
     power: { name: "Ember Edge", icon: "⚔", price: 14, max: 3, text: "+1 damage per Attack, Blood, Flame, Frost, and Lightning strike.", apply: () => { state.power++; } },
     ward: { name: "Moonward", icon: "⬡", price: 12, max: 3, text: "+1 shield per Guard, Fortune, and Bloom die.", apply: () => { state.ward++; } },
     healing: { name: "Lifebloom", icon: "✚", price: 12, max: 3, text: "+1 healing per Heal, Blood, and Bloom die.", apply: () => { state.healing++; } },
-    vitality: { name: "Lionheart", icon: "♡", price: 16, max: 3, text: "+8 maximum health and restore 8 health now.", apply: () => { state.maxHp += 8; state.hp = Math.min(state.maxHp, state.hp + 8); } },
+    vitality: { name: "Lionheart", icon: "♡", price: 16, max: 3, text: "+8 maximum health for every party member. Restore 8 health each.", apply: () => { state.party.forEach((member) => { member.maxHp += 8; member.hp = Math.min(member.maxHp, member.hp + 8); }); } },
     critical: { name: "Loaded Fate", icon: "✦", price: 14, max: 3, text: "+2 extra damage on Attack rolls of six.", apply: () => { state.critBonus += 2; } },
-    recovery: { name: "Second Wind", icon: "❧", price: 16, max: 3, text: "Recover 4 extra health after each victory. Heal 4 now.", apply: () => { state.recovery += 4; state.hp = Math.min(state.maxHp, state.hp + 4); } },
+    recovery: { name: "Second Wind", icon: "❧", price: 16, max: 3, text: "Recover 4 extra health after each kill. Heal every ally for 4 now.", apply: () => { state.recovery += 4; state.party.forEach((member) => { member.hp = Math.min(member.maxHp, member.hp + 4); }); } },
     luck: { name: "Lucky Fingers", icon: "↻", price: 22, max: 1, text: "A second reroll on every turn.", apply: () => { state.extraRerolls = 1; } },
     loot: { name: "Treasure Hunter", icon: "◈", price: 18, max: 3, text: "+25% kill gold per level, rounded up.", apply: () => { state.lootBonus += .25; } }
   };
@@ -133,12 +139,29 @@
       const boss = shuffle(monsters.filter((monster) => monster.zone === zoneIndex && monster.boss && !monster.final))[0];
       const battles = [...regulars, boss].map((monster, slot) => {
         const index = zoneIndex * SHOP_INTERVAL + slot;
-        return makeBattle(monster, index, health[zoneIndex][slot], damage[zoneIndex][slot]);
+        return addEnemyGroup(makeBattle(monster, index, health[zoneIndex][slot], damage[zoneIndex][slot]), slot);
       });
       return [...battles, { kind: "shop", name: "The Wayfarer's Market", zone: zoneIndex }];
     });
-    route.push(makeBattle(monsters.find((monster) => monster.final), RUN_LENGTH - 1, 280, 19));
+    route.push(addEnemyGroup(makeBattle(monsters.find((monster) => monster.final), RUN_LENGTH - 1, 280, 19), 3));
     return route;
+  }
+
+  function addEnemyGroup(round, slot) {
+    const count = round.zone === 0 ? 1 : round.zone === 1 ? slot === 0 ? 1 : 2 : slot === 3 ? 3 : slot === 0 ? 2 : 1 + Math.floor(Math.random() * 3);
+    const candidates = shuffle(monsters.filter((monster) => monster.zone === round.zone && !monster.boss && !round.name.endsWith(monster.name)));
+    const group = [{ ...round }];
+    for (let i = 1; i < count; i++) {
+      const monster = candidates[i - 1];
+      const attack = Math.max(1, Math.round(Math.max(...round.moves.filter((move) => move[0] !== "guard").map((move) => move[1])) * .45));
+      group.push({
+        ...monster, kind: "battle", elite: false, hp: Math.max(5, Math.round(round.hp * (round.boss ? .25 : .4))),
+        gold: Math.max(8, Math.round(round.gold * .45)), role: "GUARDIAN ESCORT", flavor: "Together, they stand against your expedition.",
+        moveOffset: Math.floor(Math.random() * monster.moves.length),
+        moves: monster.moves.map(([kind, factor, name]) => [kind, Math.max(1, Math.round(attack * factor)), name])
+      });
+    }
+    return { ...round, group };
   }
   let state;
   let best = 0;
@@ -157,8 +180,34 @@
   let restoring = false;
   let savingPaused = false;
   let scrollSaveTimer;
+  let defense = null;
+  let relaxedTiming = false;
   const wait = (ms) => new Promise((resolve) => setTimeout(resolve, reducedMotion ? Math.min(ms, 25) : ms));
   const rollDie = () => Math.floor(Math.random() * 6) + 1;
+
+  function actor() { return state.party[state.actorIndex]; }
+  function targetEnemy() { return state.enemies[state.target]; }
+  function livingMembers() { return state.party.map((member, index) => ({ member, index })).filter(({ member }) => member.hp > 0); }
+  function battleWon() { return state.enemies.every((enemy) => enemy.hp === 0); }
+  function monsterCount() { return state.encounters.reduce((count, round) => count + (round.group?.length || 0), 0); }
+  function healingTarget(member = actor()) {
+    return member.key === "healer" ? livingMembers().map(({ member: ally }) => ally).sort((a, b) => (b.maxHp - b.hp) - (a.maxHp - a.hp))[0] || member : member;
+  }
+  function createMember(key, profile = state) {
+    const definition = memberTypes[key];
+    const maxHp = definition.hp + (profile.skills.vitality || 0) * 8;
+    return { key, hp: maxHp, maxHp, shield: 0, collection: [{ id: profile.nextDieId++, type: definition.die, tier: "base", paidPrice: 0 }], dice: [], selected: null, rerolls: 1 + profile.extraRerolls, abilities: definition.ability ? [definition.ability] : [], usedAbilities: new Set() };
+  }
+  function recruitCompanions() {
+    const recruits = [];
+    Object.entries(memberTypes).forEach(([key, definition]) => {
+      if (state.completed >= definition.joins && !state.party.some((member) => member.key === key)) {
+        state.party.push(createMember(key));
+        recruits.push(key);
+      }
+    });
+    return recruits;
+  }
 
   function notify(message, severity = "info") {
     $("toast").textContent = message;
@@ -185,8 +234,9 @@
   function saveProgress(force = false) {
     if (!state || restoring || savingPaused || (!force && document.hidden) || !stablePhases.includes(state.phase) || practice?.busy) return;
     const snapshot = {
-      version: 1,
-      state: { ...state, id: undefined, usedAbilities: [...state.usedAbilities], expandedOffers: [...state.expandedOffers] },
+      version: 2,
+      state: { ...state, id: undefined, party: state.party.map((member) => ({ ...member, usedAbilities: [...member.usedAbilities] })), expandedOffers: [...state.expandedOffers] },
+      relaxedTiming,
       tutorialSeen, tutorialStep: practice ? practice.step : null,
       journal: [...$("battle-log").children].map((entry) => entry.lastChild.textContent),
       view: {
@@ -205,7 +255,7 @@
     } catch (error) { pauseSaving(error); }
   }
 
-  function validateSave(saved) {
+  function validateLegacySave(saved) {
     const require = (valid, field) => { if (!valid) throw new Error(`Invalid saved ${field}.`); };
     const integer = (value, min = 0, max = Number.MAX_SAFE_INTEGER) => Number.isSafeInteger(value) && value >= min && value <= max;
     const object = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
@@ -221,13 +271,7 @@
         require(round.kind === "shop" && round.name === "The Wayfarer's Market", "shop round");
         return;
       }
-      const monster = monsters.find((item) => round.name === `${round.elite ? "Frenzied " : ""}${item.name}` && item.zone === round.zone);
-      require(monster && round.kind === "battle" && round.type === monster.type && Boolean(round.boss) === Boolean(monster.boss) && Boolean(round.final) === (i === RUN_LENGTH - 1), "monster");
-      require(Boolean(round.boss) === (i % SHOP_INTERVAL === 3 || i === RUN_LENGTH - 1), "guardian");
-      require(integer(round.hp, 1) && integer(round.gold, 1) && integer(round.moveOffset, 0, monster.moves.length - 1), "monster values");
-      require(Array.isArray(round.moves) && round.moves.length === monster.moves.length && round.moves.every((move, j) => Array.isArray(move) && move.length === 3 && move[0] === monster.moves[j][0] && integer(move[1], 1) && move[2] === monster.moves[j][2]), "monster moves");
-      require(typeof round.role === "string" && typeof round.flavor === "string" && !/[<>&"]/.test(round.role + round.flavor), "monster text");
-      require(round.color === monster.color && Boolean(round.armored) === Boolean(monster.armored) && Boolean(round.wings) === Boolean(monster.wings) && Boolean(round.mushroom) === Boolean(monster.mushroom), "monster artwork");
+      validateMonster(round, round.zone, i % SHOP_INTERVAL === 3 || i === RUN_LENGTH - 1, i === RUN_LENGTH - 1);
     });
     require(Array.isArray(s.omens) && s.omens.length === zones.length && s.omens.every((omen) => omens.some((known) => JSON.stringify(known) === JSON.stringify(omen))), "omens");
     require(integer(s.encounter, 0, RUN_LENGTH - 1) && integer(s.completed, 0, RUN_LENGTH) && integer(s.defeated, 0, BATTLE_COUNT), "progress");
@@ -251,6 +295,105 @@
     require(["all", "dice", "skill", "ability", "owned"].includes(s.shopFilter) && typeof s.refreshed === "boolean" && Array.isArray(s.expandedOffers) && s.expandedOffers.every((index) => integer(index, 0, s.stock.length - 1)), "market state");
     require(s.pendingSale === null || (s.phase === "shop" && s.collection.some((owned) => owned.id === s.pendingSale)), "pending sale");
     require(s.phase === "victory" ? object(s.reward) && integer(s.reward.gold, 1) && integer(s.reward.recovery, 0, s.maxHp) : s.reward === null, "reward");
+    require(typeof saved.tutorialSeen === "boolean" && (saved.tutorialStep === null || (saved.tutorialSeen && ["ready", "rolled"].includes(s.phase) && integer(saved.tutorialStep, 0, 9))), "tutorial");
+    require(Array.isArray(saved.journal) && saved.journal.length <= 3 && saved.journal.every((message) => typeof message === "string" && message.length <= 1000), "journal");
+    require(object(saved.view) && typeof saved.view.help === "boolean" && typeof saved.view.reset === "boolean" && ["page", "shop", "tutorial", "instructions"].every((key) => Number.isFinite(saved.view[key]) && saved.view[key] >= 0 && saved.view[key] <= 1000000), "view");
+    require((!saved.view.help || ["ready", "rolled"].includes(s.phase)) && (!saved.view.reset || (["ready", "rolled", "shop", "won", "lost"].includes(s.phase) && s.pendingSale === null)) && (!saved.view.help || !saved.view.reset) && (saved.tutorialStep === null || (!saved.view.help && !saved.view.reset)), "open dialog");
+  }
+
+  function validateMonster(round, zone, boss, final) {
+    const require = (valid, field) => { if (!valid) throw new Error(`Invalid saved monster ${field}.`); };
+    const integer = (value, min = 0, max = Number.MAX_SAFE_INTEGER) => Number.isSafeInteger(value) && value >= min && value <= max;
+    require(round !== null && typeof round === "object" && !Array.isArray(round), "definition");
+    const monster = monsters.find((item) => round.name === `${round.elite ? "Frenzied " : ""}${item.name}` && item.zone === zone);
+    require(monster && round.zone === zone && round.kind === "battle" && round.type === monster.type && Boolean(round.boss) === Boolean(monster.boss) && Boolean(round.boss) === boss && Boolean(round.final) === final, "identity");
+    require(integer(round.hp, 1) && integer(round.gold, 1) && integer(round.moveOffset, 0, monster.moves.length - 1), "values");
+    require(Array.isArray(round.moves) && round.moves.length === monster.moves.length && round.moves.every((move, j) => Array.isArray(move) && move.length === 3 && move[0] === monster.moves[j][0] && integer(move[1], 1) && move[2] === monster.moves[j][2]), "moves");
+    require(typeof round.role === "string" && typeof round.flavor === "string" && !/[<>&"]/.test(round.role + round.flavor), "text");
+    require(round.color === monster.color && ["armored", "wings", "mushroom", "thorns"].every((key) => Boolean(round[key]) === Boolean(monster[key])), "artwork");
+  }
+
+  function upgradeSave(saved) {
+    validateLegacySave(saved);
+    const s = saved.state;
+    const knight = { key: "knight" };
+    MEMBER_FIELDS.forEach((key) => { knight[key] = s[key]; });
+    const party = [knight];
+    Object.entries(memberTypes).forEach(([key, definition]) => {
+      if (key !== "knight" && s.completed >= definition.joins) {
+        const member = createMember(key, s);
+        if (s.phase === "lost") member.hp = 0;
+        member.usedAbilities = [];
+        party.push(member);
+      }
+    });
+    const next = { ...s, party, actorIndex: 0, acted: [], target: 0, enemyCursor: 0, stats: { ...s.stats, dodges: 0, parries: 0 } };
+    MEMBER_FIELDS.forEach((key) => { delete next[key]; });
+    delete next.enemy;
+    next.encounters = s.encounters.map((round, i) => round.kind === "shop" ? round : i > s.encounter ? addEnemyGroup(round, i % SHOP_INTERVAL) : { ...round, group: [{ ...round }] });
+    next.enemies = [{ ...s.enemy, chill: 0, rewarded: s.enemy.hp === 0 }];
+    if (s.reward) next.reward = { ...s.reward, enemyIndex: 0, battleWon: true, resume: "party", recruits: party.slice(1).filter((member) => memberTypes[member.key].joins === s.completed).map((member) => member.key) };
+    return { ...saved, version: 2, state: next, relaxedTiming: false, tutorialStep: saved.tutorialStep === 9 ? tutorialSteps.length - 1 : saved.tutorialStep };
+  }
+
+  function validateSave(saved) {
+    const require = (valid, field) => { if (!valid) throw new Error(`Invalid saved ${field}.`); };
+    const integer = (value, min = 0, max = Number.MAX_SAFE_INTEGER) => Number.isSafeInteger(value) && value >= min && value <= max;
+    const object = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
+    const keys = (list, catalog) => Array.isArray(list) && new Set(list).size === list.length && list.every((key) => typeof key === "string" && Object.hasOwn(catalog, key));
+    const die = (value) => object(value) && typeof value.type === "string" && typeof value.tier === "string" && Object.hasOwn(diceTypes, value.type) && Object.hasOwn(diceTiers, value.tier) && integer(value.id, 1) && integer(value.paidPrice);
+    require(object(saved) && saved.version === 2 && object(saved.state) && typeof saved.relaxedTiming === "boolean", "format");
+    const s = saved.state;
+    require(stablePhases.includes(s.phase) && typeof s.code === "string" && /^[A-Z0-9]{4}$/.test(s.code), "phase or run code");
+    require(Array.isArray(s.encounters) && s.encounters.length === RUN_LENGTH, "route");
+    s.encounters.forEach((round, i) => {
+      const zone = Math.min(zones.length - 1, Math.floor(i / SHOP_INTERVAL));
+      require(object(round) && round.zone === zone, "area");
+      if ((i + 1) % SHOP_INTERVAL === 0) { require(round.kind === "shop" && round.name === "The Wayfarer's Market", "shop round"); return; }
+      const boss = i % SHOP_INTERVAL === 3 || i === RUN_LENGTH - 1;
+      validateMonster(round, zone, boss, i === RUN_LENGTH - 1);
+      require(Array.isArray(round.group) && round.group.length >= 1 && round.group.length <= (zone === 0 ? 1 : zone === 1 ? 2 : 3), "enemy group");
+      round.group.forEach((enemy, index) => validateMonster(enemy, zone, index === 0 && boss, index === 0 && i === RUN_LENGTH - 1));
+      require(["name", "hp", "gold", "moveOffset"].every((key) => round.group[0][key] === round[key]) && JSON.stringify(round.group[0].moves) === JSON.stringify(round.moves), "group leader");
+    });
+    require(Array.isArray(s.omens) && s.omens.length === zones.length && s.omens.every((omen) => omens.some((known) => JSON.stringify(known) === JSON.stringify(omen))), "omens");
+    require(integer(s.encounter, 0, RUN_LENGTH - 1) && integer(s.completed, 0, RUN_LENGTH) && integer(s.turn, 1) && integer(s.gold), "progress");
+    require((s.phase === "shop") === (s.encounters[s.encounter].kind === "shop") && (s.phase !== "won" || s.encounter === RUN_LENGTH - 1), "round phase");
+    require(object(s.skills) && Object.entries(s.skills).every(([key, level]) => Object.hasOwn(skills, key) && integer(level, 1, skills[key].max)), "skills");
+    require(s.power === (s.skills.power || 0) && s.ward === (s.skills.ward || 0) && s.healing === (s.skills.healing || 0) && s.critBonus === 3 + (s.skills.critical || 0) * 2 && s.recovery === (s.skills.recovery || 0) * 4 && s.lootBonus === (s.skills.loot || 0) * .25 && s.extraRerolls === (s.skills.luck || 0), "skill bonuses");
+    const expectedParty = Object.keys(memberTypes).filter((key) => memberTypes[key].joins <= s.completed);
+    require(Array.isArray(s.party) && s.party.length === expectedParty.length && s.party.every((member, i) => object(member) && member.key === expectedParty[i]), "party");
+    const ids = [];
+    s.party.forEach((member) => {
+      require(member.maxHp === memberTypes[member.key].hp + (s.skills.vitality || 0) * 8 && integer(member.hp, 0, member.maxHp) && integer(member.shield) && integer(member.rerolls, 0, 1 + s.extraRerolls), "party health");
+      require(Array.isArray(member.collection) && member.collection.length >= 1 && member.collection.length <= MAX_DICE && member.collection.every(die) && member.collection.some((owned) => diceTypes[owned.type].offensive), "member collection");
+      ids.push(...member.collection.map((owned) => owned.id));
+      require(Array.isArray(member.dice) && (member.dice.length === 0 || member.dice.length === member.collection.length) && member.dice.every((rolled, i) => die(rolled) && ["id", "type", "tier", "paidPrice"].every((key) => rolled[key] === member.collection[i][key]) && integer(rolled.value, 1, 6)), "member dice");
+      require(member.selected === null || integer(member.selected, 0, member.dice.length - 1), "dice selection");
+      require(keys(member.abilities, abilities) && Array.isArray(member.usedAbilities) && new Set(member.usedAbilities).size === member.usedAbilities.length && member.usedAbilities.every((key) => member.abilities.includes(key)), "member abilities");
+    });
+    require(new Set(ids).size === ids.length && integer(s.nextDieId, Math.max(...ids) + 1), "die IDs");
+    require(integer(s.actorIndex, 0, s.party.length - 1) && Array.isArray(s.acted) && new Set(s.acted).size === s.acted.length && s.acted.every((index) => integer(index, 0, s.party.length - 1)), "party turn");
+    require((s.phase === "lost") === s.party.every((member) => member.hp === 0), "party defeat");
+    const member = s.party[s.actorIndex];
+    require(!["ready", "rolled"].includes(s.phase) || (member.hp > 0 && !s.acted.includes(s.actorIndex) && member.dice.length === (s.phase === "ready" ? 0 : member.collection.length)), "active turn");
+    const source = s.encounters[s.phase === "shop" ? s.encounter - 1 : s.encounter].group;
+    require(Array.isArray(s.enemies) && s.enemies.length === source.length && integer(s.target, 0, s.enemies.length - 1) && integer(s.enemyCursor, 0, s.enemies.length), "current enemies");
+    s.enemies.forEach((enemy, i) => {
+      const definition = source[i];
+      require(object(enemy) && enemy.name === definition.name && enemy.maxHp === definition.hp && integer(enemy.hp, 0, enemy.maxHp) && integer(enemy.shield) && integer(enemy.poison, 0, 12) && integer(enemy.chill) && typeof enemy.frozen === "boolean" && typeof enemy.rewarded === "boolean" && enemy.rewarded === (enemy.hp === 0), "enemy status");
+    });
+    const won = s.enemies.every((enemy) => enemy.hp === 0);
+    require((!["ready", "rolled", "lost"].includes(s.phase) || !won) && (!["ready", "rolled"].includes(s.phase) || s.enemies[s.target].hp > 0), "enemy target");
+    require(s.phase === "victory" ? object(s.reward) && integer(s.reward.gold, 1) && integer(s.reward.recovery, 0, s.party.reduce((total, ally) => total + ally.maxHp, 0)) && integer(s.reward.enemyIndex, 0, s.enemies.length - 1) && s.enemies[s.reward.enemyIndex].rewarded && s.reward.battleWon === won && ["party", "enemies", "ability-ready", "ability-rolled"].includes(s.reward.resume) && keys(s.reward.recruits, memberTypes) && s.reward.recruits.every((key) => key !== "knight" && s.party.some((ally) => ally.key === key)) : s.reward === null, "reward");
+    const completed = s.phase === "won" || (s.phase === "victory" && won) ? s.encounter + 1 : s.encounter;
+    require(s.completed === completed && (!["shop", "won"].includes(s.phase) || won), "completed rounds");
+    const kills = s.encounters.slice(0, completed).reduce((total, round) => total + (round.group?.length || 0), 0) + (s.encounter >= completed && s.phase !== "shop" ? s.enemies.filter((enemy) => enemy.rewarded).length : 0);
+    require(s.defeated === kills, "monster count");
+    require(object(s.stats) && ["rolls", "damage", "criticals", "earned", "dodges", "parries"].every((key) => integer(s.stats[key])), "statistics");
+    require(Array.isArray(s.stock) && s.stock.length <= 10 && s.stock.every((offer) => object(offer) && ["dice", "skill", "ability"].includes(offer.kind) && typeof offer.key === "string" && Object.hasOwn(offer.kind === "dice" ? diceTypes : offer.kind === "skill" ? skills : abilities, offer.key) && integer(offer.price, 1) && typeof offer.bought === "boolean"), "market stock");
+    require(["all", "dice", "skill", "ability", "owned"].includes(s.shopFilter) && typeof s.refreshed === "boolean" && Array.isArray(s.expandedOffers) && s.expandedOffers.every((index) => integer(index, 0, s.stock.length - 1)), "market state");
+    require(s.pendingSale === null || (s.phase === "shop" && member.collection.some((owned) => owned.id === s.pendingSale)), "pending sale");
     require(typeof saved.tutorialSeen === "boolean" && (saved.tutorialStep === null || (saved.tutorialSeen && ["ready", "rolled"].includes(s.phase) && integer(saved.tutorialStep, 0, tutorialSteps.length - 1))), "tutorial");
     require(Array.isArray(saved.journal) && saved.journal.length <= 3 && saved.journal.every((message) => typeof message === "string" && message.length <= 1000), "journal");
     require(object(saved.view) && typeof saved.view.help === "boolean" && typeof saved.view.reset === "boolean" && ["page", "shop", "tutorial", "instructions"].every((key) => Number.isFinite(saved.view[key]) && saved.view[key] >= 0 && saved.view[key] <= 1000000), "view");
@@ -262,18 +405,20 @@
     try {
       if (text === null) return false;
       saved = JSON.parse(text);
+      if (saved.version === 1) saved = upgradeSave(saved);
       validateSave(saved);
     } catch (error) { pauseSaving(error); return false; }
     restoring = true;
-    state = { ...saved.state, id: ++runSerial, usedAbilities: new Set(saved.state.usedAbilities), expandedOffers: new Set(saved.state.expandedOffers) };
-    const source = state.encounters[state.phase === "shop" ? state.encounter - 1 : state.encounter];
-    state.enemy = { ...source, hp: saved.state.enemy.hp, maxHp: source.hp, shield: saved.state.enemy.shield, poison: saved.state.enemy.poison, frozen: saved.state.enemy.frozen };
+    cancelDefense();
+    state = { ...saved.state, id: ++runSerial, party: saved.state.party.map((member) => ({ ...member, usedAbilities: new Set(member.usedAbilities) })), expandedOffers: new Set(saved.state.expandedOffers) };
+    const source = state.encounters[state.phase === "shop" ? state.encounter - 1 : state.encounter].group;
+    state.enemies = source.map((definition, i) => ({ ...definition, maxHp: definition.hp, ...Object.fromEntries(["hp", "shield", "poison", "frozen", "chill", "rewarded"].map((key) => [key, saved.state.enemies[i][key]])) }));
+    relaxedTiming = saved.relaxedTiming;
     tutorialSeen = saved.tutorialSeen;
     practice = saved.tutorialStep === null ? null : createPractice(saved.tutorialStep);
     lastSavedText = text;
     ["shop-overlay", "reward-overlay", "sell-overlay", "end-overlay", "reset-overlay", "help-overlay", "tutorial-overlay"].forEach((id) => { $(id).hidden = true; });
     $("hero-art").className = "character-art";
-    $("hero-art").innerHTML = heroArtwork();
     $("hero-effects").replaceChildren();
     $("enemy-effects").replaceChildren();
     $("battle-log").replaceChildren();
@@ -296,7 +441,7 @@
       paintPractice();
       $("tutorial-overlay").hidden = false;
       renderTutorial();
-    } else if (state.phase === "rolled" && state.selected !== null) $("dice-tray").children[state.selected].focus({ preventScroll: true });
+    } else if (state.phase === "rolled" && actor().selected !== null) $("dice-tray").children[actor().selected].focus({ preventScroll: true });
     else $("main-button").focus({ preventScroll: true });
     if (saved.view.reset) openReset();
     else if (saved.view.help) openHelp();
@@ -307,6 +452,7 @@
     restoring = false;
     savingPaused = false;
     $("save-status").textContent = "PROGRESS SAVED ON THIS BROWSER";
+    saveProgress();
     return true;
   }
 
@@ -421,6 +567,35 @@
       <linearGradient id="hero-metal" x2="1" y2=".6"><stop stop-color="#d2d4ac"/><stop offset=".5" stop-color="#94ad98"/><stop offset="1" stop-color="#527973"/></linearGradient>
       <linearGradient id="hero-blade" x2="1" y2=".3"><stop stop-color="#d4f3e0"/><stop offset=".5" stop-color="#a5d4c5"/><stop offset="1" stop-color="#618e88"/></linearGradient>
       <linearGradient id="hero-shield" x2="1" y2="1"><stop stop-color="#466b58"/><stop offset="1" stop-color="#163936"/></linearGradient>`);
+  }
+
+  function memberArtwork(key) {
+    if (key === "knight") return heroArtwork();
+    const mage = key === "mage";
+    const color = mage ? "#ae91dc" : "#84cbb0";
+    const trim = mage ? "#e8cb86" : "#d6e9ba";
+    return svgFrame(`
+      <ellipse cx="120" cy="229" rx="72" ry="11" fill="${color}" opacity=".16"/>
+      <path d="M85 117q-25 37-35 103l47 12 23-13 24 15 48-16q-18-74-44-102Z" fill="url(#companion-robe)" stroke="#283a48" stroke-width="4"/>
+      <path d="m80 138-10 73 29-8m48-66 25 69-24-6m-29-76v89" stroke="${trim}" stroke-width="3" opacity=".65"/>
+      <path d="m104 217-4 20 17 0 4-18m7 0 6 20 18-1-11-19" fill="#344050" stroke="#a9b9b0" stroke-width="3"/>
+      <path d="m83 108 37-16 38 19-9 47-29 15-32-16Z" fill="${color}" stroke="#344d50" stroke-width="3"/>
+      <path d="m92 115 29 20 28-18m-29 19v26" stroke="${trim}" stroke-width="3"/>
+      <path d="m112 133 9-10 9 11-9 13Z" fill="${trim}"/>
+      <path d="m90 118-17 27-11 21m89-47 12 21 21-2" stroke="${color}" stroke-width="17" stroke-linecap="round"/>
+      <path d="m56 159-6 15 15 4 5-12m105-33 9 12 10-6-5-11" fill="#dfc0a4" stroke="#546766" stroke-width="3"/>
+      <path d="M91 56q2-30 30-31 28 1 31 31l-5 44-26 14-25-16Z" fill="#6c4a52" stroke="#293d45" stroke-width="3"/>
+      <path d="M100 58q20-12 41 0l-2 30-17 16-20-13Z" fill="#e2c1a0" stroke="#9a786b" stroke-width="2"/>
+      <path d="M96 61q3-35 27-28 28 2 25 27l-12-15-16 16-8-15-12 18" fill="${mage ? "#d6b27b" : "#975b52"}"/>
+      <path d="m106 74 8-1m15 0 7 1" stroke="#384652" stroke-width="3" stroke-linecap="round"/>
+      <path d="m118 87 10 0" stroke="#a96f65" stroke-width="2" stroke-linecap="round"/>
+      <path d="m103 51 20-8 15 6" stroke="${trim}" stroke-width="3"/>
+      <path d="M184 63v158" stroke="#534747" stroke-width="9" stroke-linecap="round"/>
+      <path d="M184 65v153" stroke="${trim}" stroke-width="3"/>
+      ${mage ? `<path d="m184 24 18 23-18 26-17-25Z" fill="${color}" stroke="${trim}" stroke-width="3"/><path d="m184 32 0 30m-10-15h21" stroke="#f6eac5" stroke-width="3"/><circle cx="184" cy="48" r="32" stroke="${color}" stroke-width="1" opacity=".3"/>` : `<path d="M196 29a23 23 0 1 0 1 36 18 18 0 0 1-1-36Z" fill="${trim}" stroke="#789d85" stroke-width="2"/><path d="m184 41 5 7-5 7-5-7Z" fill="${color}"/>`}
+      <path d="m76 182 22-6 9 14-3 22-24-1Z" fill="#405454" stroke="${trim}" stroke-width="2"/>
+      <path d="m84 189 13 4m-12 4 11 3" stroke="${color}" stroke-width="2"/>
+    `, `<linearGradient id="companion-robe" x2=".8" y2="1"><stop stop-color="${color}"/><stop offset="1" stop-color="${mage ? "#443a70" : "#284f4d"}"/></linearGradient>`);
   }
 
   function slimeArtwork(enemy) {
@@ -645,20 +820,20 @@
       catch (error) { pauseSaving(error); }
     }
     clearInfoToast();
+    cancelDefense();
     practice = null;
     $("practice-dice").replaceChildren();
     state = {
       id: ++runSerial, code: Math.random().toString(36).slice(2, 6).padEnd(4, "0").toUpperCase(),
       encounters: generateRun(), omens: shuffle(omens),
       phase: "ready", encounter: 0, completed: 0, defeated: 0, reward: null, turn: 1, gold: 0,
-      hp: 40, maxHp: 40, shield: 0, power: 0, ward: 0, healing: 0, critBonus: 3, recovery: 0,
-      extraRerolls: 0, lootBonus: 0, collection: [{ id: 1, type: "attack", tier: "base", paidPrice: 0 }], nextDieId: 2, pendingSale: null, dice: [],
-      selected: null, rerolls: 1, enemy: null, abilities: [], usedAbilities: new Set(), skills: {},
-      stats: { rolls: 0, damage: 0, criticals: 0, earned: 0 }, stock: [], shopFilter: "all", refreshed: false, expandedOffers: new Set()
+      power: 0, ward: 0, healing: 0, critBonus: 3, recovery: 0, extraRerolls: 0, lootBonus: 0,
+      party: [], actorIndex: 0, acted: [], nextDieId: 1, pendingSale: null, enemies: [], target: 0, enemyCursor: 0, skills: {},
+      stats: { rolls: 0, damage: 0, criticals: 0, earned: 0, dodges: 0, parries: 0 }, stock: [], shopFilter: "all", refreshed: false, expandedOffers: new Set()
     };
+    state.party.push(createMember("knight"));
     ["shop-overlay", "reward-overlay", "sell-overlay", "end-overlay", "reset-overlay", "help-overlay", "tutorial-overlay"].forEach((id) => { $(id).hidden = true; });
     $("hero-art").className = "character-art";
-    $("hero-art").innerHTML = heroArtwork();
     $("hero-effects").replaceChildren();
     $("enemy-effects").replaceChildren();
     $("battle-log").replaceChildren();
@@ -668,53 +843,120 @@
 
   function loadEncounter() {
     const definition = state.encounters[state.encounter];
-    state.shield = 0;
+    state.party.forEach((member) => { member.shield = 0; member.dice = []; member.selected = null; member.rerolls = 1 + state.extraRerolls; member.usedAbilities.clear(); });
+    state.acted = [];
+    state.actorIndex = livingMembers()[0]?.index ?? 0;
+    state.enemyCursor = 0;
+    state.target = 0;
     if (definition.kind === "shop") { openShop(); return; }
-    state.enemy = { ...definition, maxHp: definition.hp, shield: 0, poison: 0, frozen: false };
+    state.enemies = definition.group.map((enemy) => ({ ...enemy, maxHp: enemy.hp, shield: 0, poison: 0, frozen: false, chill: 0, rewarded: false }));
     state.phase = "ready";
     state.turn = 1;
-    state.dice = [];
-    state.selected = null;
-    state.rerolls = 1 + state.extraRerolls;
-    state.usedAbilities = new Set();
     paintEncounter();
   }
 
   function paintEncounter() {
-    const definition = state.enemy;
+    const definition = targetEnemy();
     const zoneIndex = definition.zone;
     const zone = zones[zoneIndex];
     $("zone-title").textContent = zone.title;
     $("area-label").textContent = zone.label;
     $("arena").className = `arena ${zone.className}`;
     $("scene-art").innerHTML = sceneArtwork(zoneIndex);
-    $("enemy-name").textContent = definition.name.replace(/^Frenzied /, "");
-    $("enemy-name").title = definition.name;
-    $("enemy-role").textContent = definition.role;
-    $("enemy-icon").textContent = definition.boss ? "♛" : ["I", "II", "III", "IV", "V", "VI"][zoneIndex];
     $("flavor-text").textContent = definition.flavor;
-    $("enemy-art").className = `character-art ${definition.type}${definition.boss ? " boss" : ""}`;
-    $("enemy-art").innerHTML = definition.type === "slime" ? slimeArtwork(definition) : definition.type === "skeleton" ? skeletonArtwork(definition) : definition.type === "demon" ? demonArtwork(definition) : creatureArtwork(definition);
-    if (definition.mushroom) {
-      $("enemy-art").querySelector("svg").insertAdjacentHTML("beforeend", '<path d="M56 105q13-83 69-75 49 3 64 74Z" fill="#af677f" stroke="#663f62" stroke-width="4"/><g fill="#edccbe"><ellipse cx="90" cy="75" rx="11" ry="7"/><ellipse cx="138" cy="53" rx="9" ry="6"/><ellipse cx="163" cy="88" rx="10" ry="7"/></g>');
-    }
-    $("ward-aura").classList.remove("visible");
     render();
   }
 
-  function getIntent() {
-    const [kind, base, name] = state.enemy.moves[(state.turn - 1 + state.enemy.moveOffset) % state.enemy.moves.length];
+  function enemyArtwork(enemy) {
+    let artwork = enemy.type === "slime" ? slimeArtwork(enemy) : enemy.type === "skeleton" ? skeletonArtwork(enemy) : enemy.type === "demon" ? demonArtwork(enemy) : creatureArtwork(enemy);
+    if (enemy.mushroom) artwork = artwork.replace("</svg>", '<path d="M56 105q13-83 69-75 49 3 64 74Z" fill="#af677f" stroke="#663f62" stroke-width="4"/><g fill="#edccbe"><ellipse cx="90" cy="75" rx="11" ry="7"/><ellipse cx="138" cy="53" rx="9" ry="6"/><ellipse cx="163" cy="88" rx="10" ry="7"/></g></svg>');
+    return artwork;
+  }
+
+  function namespaceArtwork(markup, prefix) {
+    return markup.replace(/id="([^"]+)"/g, (_, id) => `id="${prefix}-${id}"`).replace(/url\(#([^)]+)\)/g, (_, id) => `url(#${prefix}-${id})`);
+  }
+
+  function paintCombatants() {
+    const member = actor();
+    const definition = memberTypes[member.key];
+    const heroKey = `${state.id}-${member.key}`;
+    if ($("hero-art").dataset.artKey !== heroKey) {
+      $("hero-art").dataset.artKey = heroKey;
+      $("hero-art").className = `character-art member-${member.key}`;
+      $("hero-art").innerHTML = namespaceArtwork(memberArtwork(member.key), "active");
+    }
+    $("hero-art").classList.toggle("defeated", member.hp === 0);
+    $("hero-name").textContent = definition.name;
+    $("hero-role").textContent = definition.title;
+    const enemy = targetEnemy();
+    const enemyKey = `${state.id}-${state.encounter}-${state.target}`;
+    if ($("enemy-art").dataset.artKey !== enemyKey) {
+      $("enemy-art").dataset.artKey = enemyKey;
+      $("enemy-art").className = `character-art ${enemy.type}${enemy.boss ? " boss" : ""}`;
+      $("enemy-art").innerHTML = enemyArtwork(enemy);
+    }
+    $("enemy-art").classList.toggle("defeated", enemy.hp === 0);
+    $("enemy-name").textContent = enemy.name.replace(/^Frenzied /, "");
+    $("enemy-name").title = enemy.name;
+    $("enemy-role").textContent = enemy.role;
+    $("enemy-icon").textContent = enemy.boss ? "♛" : ["I", "II", "III", "IV", "V", "VI"][enemy.zone];
+  }
+
+  function memberCards(shop = false) {
+    return Object.entries(memberTypes).map(([key, definition]) => {
+      const index = state.party.findIndex((member) => member.key === key);
+      if (index < 0) return `<div class="party-card locked-member"><span class="party-portrait">${definition.icon}</span><span><strong>${definition.name}</strong><small>Rescue after round ${definition.joins}</small></span></div>`;
+      const member = state.party[index];
+      const disabled = !shop && (practice || state.phase !== "ready" || !member.hp || state.acted.includes(index));
+      return `<button class="party-card${index === state.actorIndex ? " active-member" : ""}${!member.hp ? " downed" : ""}" data-member="${index}" aria-pressed="${index === state.actorIndex}" aria-label="${definition.name}, ${definition.role}, ${member.hp} of ${member.maxHp} health, ${member.collection.length} dice. ${definition.perk}"${disabled ? " disabled" : ""}><span class="party-portrait" aria-hidden="true">${namespaceArtwork(memberArtwork(key), `${shop ? "shop" : "party"}-${key}`)}</span><span class="member-copy"><strong>${definition.name} <em>${definition.role}</em></strong><small>${member.hp} / ${member.maxHp} HP${member.shield ? ` · ⬡ ${member.shield}` : ""}</small><span class="member-health"><i style="width:${member.hp / member.maxHp * 100}%"></i></span><small>${shop ? `${member.collection.length} / 6 dice` : !member.hp ? "DOWNED" : state.acted.includes(index) ? "TURN COMPLETE" : index === state.actorIndex ? "ACTIVE TURN" : "TURN READY"}</small></span></button>`;
+    }).join("");
+  }
+
+  function renderFormation() {
+    $("party-roster").innerHTML = memberCards();
+    $("party-turn-label").textContent = `${memberTypes[actor().key].name}'s dice · ${state.acted.length} / ${state.party.length} turns spent`;
+    $("enemy-group-label").textContent = `${state.enemies.filter((enemy) => enemy.hp > 0).length} / ${state.enemies.length} alive · click a target`;
+    $("enemy-roster").innerHTML = state.enemies.map((enemy, i) => {
+      const intent = getIntent(enemy);
+      const member = state.party[intent.target];
+      const disabled = practice || !["ready", "rolled"].includes(state.phase) || !enemy.hp;
+      return `<button class="enemy-card${i === state.target ? " targeted" : ""}${!enemy.hp ? " fallen-enemy" : ""}" data-enemy="${i}" aria-pressed="${i === state.target}" aria-label="Target ${enemy.name}, ${enemy.hp} of ${enemy.maxHp} health${enemy.shield ? `, ${enemy.shield} shield` : ""}"${disabled ? " disabled" : ""}><span class="enemy-portrait" aria-hidden="true">${namespaceArtwork(enemyArtwork(enemy), `formation-${i}`)}</span><strong>${enemy.name.replace(/^Frenzied /, "")}</strong><small>${enemy.hp} / ${enemy.maxHp} HP${enemy.shield ? ` · ⬡ ${enemy.shield}` : ""}</small><span class="member-health enemy-health-track"><i style="width:${enemy.hp / enemy.maxHp * 100}%"></i></span><small>${!enemy.hp ? "DEFEATED" : enemy.frozen ? "FROZEN" : intent.kind === "guard" ? `⬡ ${intent.value} shield` : `⚔ ${Math.max(0, intent.value - enemy.chill)} → ${memberTypes[member.key].name}${enemy.chill ? " · ❄" : ""}`}${enemy.poison && enemy.hp ? ` · ❧ ${enemy.poison}` : ""}</small></button>`;
+    }).join("");
+  }
+
+  function selectMember(index) {
+    if (practice || !$("reset-overlay").hidden || !state.party[index]) return;
+    if (state.phase === "shop") closeSale(false);
+    else if (state.phase !== "ready" || !state.party[index].hp || state.acted.includes(index)) return;
+    state.actorIndex = index;
+    render();
+    if (state.phase === "shop") renderShop();
+    else $("main-button").focus({ preventScroll: true });
+  }
+
+  function selectEnemy(index) {
+    if (practice || !["ready", "rolled"].includes(state.phase) || !state.enemies[index]?.hp) return;
+    state.target = index;
+    render();
+    $("enemy-roster").querySelector(`[data-enemy="${index}"]`).focus({ preventScroll: true });
+  }
+
+  function getIntent(enemy = targetEnemy()) {
+    const [kind, base, name] = enemy.moves[(state.turn - 1 + enemy.moveOffset) % enemy.moves.length];
     const rage = Math.floor((state.turn - 1) / 3);
-    return { kind, value: kind === "guard" ? base : base + rage, name, rage };
+    const living = livingMembers();
+    const target = living.length ? living[(state.turn - 1 + state.enemies.indexOf(enemy)) % living.length].index : state.actorIndex;
+    return { kind, value: kind === "guard" ? base : base + rage, name, rage, target };
   }
 
   function totals() {
     const result = { attack: 0, guard: 0, mend: 0, criticals: 0, pierce: 0, poison: 0, gold: 0, chill: 0, chains: 0 };
     const omen = currentOmen();
-    const power = state.power + (omen.power || 0);
+    const power = state.power + (omen.power || 0) + (actor().key === "mage" ? 2 : 0);
     const ward = state.ward + (omen.ward || 0);
     const healing = state.healing + (omen.healing || 0);
-    state.dice.forEach((die) => {
+    actor().dice.forEach((die) => {
       const value = die.value + diceTiers[die.tier].bonus;
       if (die.type === "attack") {
         result.attack += value + power + (die.value === 6 ? state.critBonus + (omen.critical || 0) : 0);
@@ -749,18 +991,107 @@
     return { blocked, damage: incoming - blocked, shield: shield - blocked };
   }
 
+  function defenseResult(action, progress) {
+    const [start, end] = action === "parry" ? [.78, .9] : [.58, .94];
+    return { action, success: progress >= start && progress <= end, timing: progress < start ? "early" : progress > end ? "late" : "perfect" };
+  }
+
+  function defend(title, description, required = null) {
+    cancelDefense();
+    return new Promise((resolve) => {
+      defense = { resolve, required, armed: false, paused: false, elapsed: 0, frame: 0 };
+      $("defense-title").textContent = title;
+      $("defense-description").textContent = description;
+      $("defense-status").textContent = "Ready when you are. Start the strike, then react once as the marker crosses a colored window.";
+      $("defense-meter").dataset.progress = "0";
+      $("defense-meter").setAttribute("aria-valuenow", "0");
+      $("defense-marker").style.left = "0%";
+      $("defense-ready").hidden = false;
+      $("defense-dodge").disabled = true;
+      $("defense-parry").disabled = true;
+      $("defense-relaxed").checked = relaxedTiming;
+      $("defense-relaxed").disabled = false;
+      $("defense-overlay").hidden = false;
+      document.querySelector(".app").inert = true;
+      $("tutorial-overlay").inert = Boolean(practice);
+      $("defense-ready").focus({ preventScroll: true });
+    });
+  }
+
+  function armDefense() {
+    if (!defense || defense.armed) return;
+    defense.armed = true;
+    defense.duration = relaxedTiming ? 5000 : 2500;
+    defense.startedAt = performance.now();
+    defense.paused = document.hidden;
+    $("defense-ready").hidden = true;
+    $("defense-relaxed").disabled = true;
+    $("defense-dodge").disabled = Boolean(defense.required && defense.required !== "dodge");
+    $("defense-parry").disabled = Boolean(defense.required && defense.required !== "parry");
+    $("defense-status").textContent = defense.required === "parry" ? "Wait for GOLD. Press P or Parry inside the narrow gold window." : "Watch the marker. DODGE [D] in blue; PARRY [P] in gold.";
+    $("defense-overlay").querySelector(".modal").focus({ preventScroll: true });
+    if (!defense.paused) tickDefense(defense);
+  }
+
+  function tickDefense(session) {
+    if (defense !== session) return;
+    if (document.hidden) { pauseDefense(); return; }
+    const progress = Math.min(1, (performance.now() - session.startedAt) / session.duration);
+    $("defense-meter").dataset.progress = String(progress);
+    $("defense-meter").setAttribute("aria-valuenow", String(Math.round(progress * 100)));
+    $("defense-marker").style.left = `${progress * 100}%`;
+    if (progress >= 1) { finishDefense({ action: null, success: false, timing: "missed" }); return; }
+    session.frame = requestAnimationFrame(() => tickDefense(session));
+  }
+
+  function reactDefense(action) {
+    if (!defense?.armed || defense.paused || document.hidden || (defense.required && defense.required !== action)) return;
+    finishDefense(defenseResult(action, (performance.now() - defense.startedAt) / defense.duration));
+  }
+
+  function finishDefense(result) {
+    if (!defense) return;
+    const session = defense;
+    cancelAnimationFrame(session.frame);
+    defense = null;
+    $("defense-overlay").hidden = true;
+    $("tutorial-overlay").inert = false;
+    document.querySelector(".app").inert = Boolean(practice) || ["victory", "shop", "won", "lost"].includes(state.phase);
+    session.resolve(result);
+  }
+
+  function cancelDefense() {
+    if (defense) finishDefense({ cancelled: true, success: false, action: null });
+  }
+
+  function pauseDefense() {
+    if (!defense?.armed || defense.paused) return;
+    defense.elapsed = Math.min(1, (performance.now() - defense.startedAt) / defense.duration);
+    defense.paused = true;
+    cancelAnimationFrame(defense.frame);
+  }
+
+  function resumeDefense() {
+    if (!defense?.armed || !defense.paused) return;
+    defense.startedAt = performance.now() - defense.elapsed * defense.duration;
+    defense.paused = false;
+    tickDefense(defense);
+  }
+
   function render() {
-    const enemy = state.enemy;
+    const enemy = targetEnemy();
     const intent = getIntent();
+    paintCombatants();
+    renderFormation();
     const app = document.querySelector(".app");
     app.hidden = state.phase === "shop";
     app.inert = Boolean(practice) || ["victory", "shop", "won", "lost"].includes(state.phase);
-    $("hero-hp").innerHTML = `${state.hp} <small>/ ${state.maxHp}</small><span class="hero-shield" id="hero-shield-counter" title="Unused shield carries between turns and clears when this battle ends." aria-label="${state.shield} shield remaining"${state.shield ? "" : " hidden"}> · ⬡ <b>${state.shield}</b></span>`;
-    $("ward-aura").classList.toggle("visible", state.shield > 0);
+    $("hero-hp").innerHTML = `${actor().hp} <small>/ ${actor().maxHp}</small><span class="hero-shield" id="hero-shield-counter" title="Unused shield carries between turns and clears when this battle ends." aria-label="${actor().shield} shield remaining"${actor().shield ? "" : " hidden"}> · ⬡ <b>${actor().shield}</b></span>`;
+    $("ward-aura").classList.toggle("visible", actor().shield > 0);
     $("enemy-hp").innerHTML = `${enemy.hp} <small>/ ${enemy.maxHp}${enemy.shield ? ` · ⬡ ${enemy.shield}` : ""}</small>`;
-    $("hero-health-fill").style.width = `${state.hp / state.maxHp * 100}%`;
+    $("hero-health-fill").style.width = `${actor().hp / actor().maxHp * 100}%`;
     $("enemy-health-fill").style.width = `${enemy.hp / enemy.maxHp * 100}%`;
-    $("hero-power").textContent = `+${state.power} attack power`;
+    $("hero-power").textContent = `+${state.power + (actor().key === "mage" ? 2 : 0)} attack power`;
     $("hero-healing").textContent = `+${state.healing} healing`;
     $("hero-caption")?.setAttribute("title", `Attack +${state.power} per die. Guard +${state.ward} per die. Mend +${state.healing} per die. Critical bonus +${state.critBonus}.`);
     $("encounter-number").textContent = String(state.encounter + 1).padStart(2, "0");
@@ -776,17 +1107,17 @@
       return `${slot ? '<span class="route-line"></span>' : ""}<span class="route-node${round.boss ? " boss" : ""}${round.kind === "shop" ? " shop-node" : ""}${i < state.completed ? " done" : i === state.encounter ? " current" : ""}" data-round="${i + 1}" data-kind="${round.kind}" aria-label="Round ${i + 1}: ${round.name}${i < state.completed ? ", completed" : i === state.encounter ? ", current" : ""}"${i === state.encounter ? ' aria-current="step"' : ""}><span>${i < state.completed ? "✓" : round.kind === "shop" ? "◈" : round.boss ? "♛" : i + 1}</span></span>`;
     }).join("")}</span>`).join("");
     const intentIcon = intent.kind === "guard" ? "⬡" : intent.kind === "drain" ? "✦" : "⚔";
-    const intentSuffix = intent.kind === "guard" ? `gains <strong>${intent.value}</strong> shield` : `<strong>${intent.value}</strong> damage${intent.kind === "drain" ? " + lifesteal" : ""}`;
-    $("intent").innerHTML = `<span class="intent-icon">${intentIcon}</span><span>${enemy.frozen ? "FROZEN · next action skipped" : `${intent.name} · ${intentSuffix}`}${enemy.poison ? ` · ❧ ${enemy.poison}` : ""}</span>`;
+    const intentSuffix = intent.kind === "guard" ? `gains <strong>${intent.value}</strong> shield` : `<strong>${Math.max(0, intent.value - enemy.chill)}</strong> damage${enemy.chill ? ` (❄ −${enemy.chill})` : ""}${intent.kind === "drain" ? " + lifesteal" : ""}`;
+    $("intent").innerHTML = `<span class="intent-icon">${intentIcon}</span><span>${enemy.frozen ? "FROZEN · next action skipped" : `${intent.name} · ${intentSuffix}${intent.kind !== "guard" && enemy.hp ? ` → ${memberTypes[state.party[intent.target].key].name}` : ""}`}${enemy.poison ? ` · ❧ ${enemy.poison}` : ""}</span>`;
     const phase = state.phase;
     const badge = phase === "resolving" ? "BATTLE IN MOTION" : ["victory", "shop", "won"].includes(phase) ? "VICTORY" : phase === "lost" ? "EXPEDITION ENDED" : "YOUR TURN";
     $("battle-badge").innerHTML = `<span></span> ${badge}`;
     renderDice();
     const values = totals();
     ["attack", "guard", "mend"].forEach((action) => {
-      const value = action === "attack" ? values.attack + values.pierce : action === "guard" ? state.shield + (["rolling", "rolled"].includes(phase) ? values.guard : 0) : values[action];
+      const value = action === "attack" ? values.attack + values.pierce : action === "guard" ? actor().shield + (["rolling", "rolled"].includes(phase) ? values.guard : 0) : values[action];
       $(`${action}-value`).textContent = value;
-      $(`${action}-dice`).textContent = action === "guard" && value ? `${state.shield} STORED${phase === "rolled" && values.guard ? ` · +${values.guard} NEW` : ""}` : phase === "ready" ? "ROLL TO REVEAL" : action === "attack" && values.criticals ? `${values.criticals} CRITICAL ${values.criticals === 1 ? "DIE" : "DICE"}` : value ? "AUTOMATIC EFFECT" : "NO CONTRIBUTION";
+      $(`${action}-dice`).textContent = action === "guard" && value ? `${actor().shield} STORED${phase === "rolled" && values.guard ? ` · +${values.guard} NEW` : ""}` : phase === "ready" ? "ROLL TO REVEAL" : action === "attack" && values.criticals ? `${values.criticals} CRITICAL ${values.criticals === 1 ? "DIE" : "DICE"}` : value ? "AUTOMATIC EFFECT" : "NO CONTRIBUTION";
       $(`${action}-dice`).classList.toggle("has-dice", value > 0);
       $(`summary-${action}`).classList.toggle("active", value > 0);
     });
@@ -795,18 +1126,17 @@
     $("reset-button").disabled = ["rolling", "resolving", "victory"].includes(phase);
     $("tutorial-button").disabled = !["ready", "rolled"].includes(phase);
     $("start-tutorial").disabled = !["ready", "rolled"].includes(phase);
-    $("main-button-text").textContent = phase === "ready" ? state.collection.length === 1 ? "Roll your die" : "Roll your dice" : phase === "rolling" ? "Rolling…" : phase === "resolving" ? "Fighting…" : phase === "rolled" ? "Make your move" : "Battle complete";
-    $("reroll-button").disabled = phase !== "rolled" || !state.rerolls || state.selected === null;
-    $("reroll-button").innerHTML = `↻ Reroll selected <span>${state.rerolls} left</span>`;
-    $("dice-count").textContent = `${state.collection.length} / ${MAX_DICE}`;
+    $("main-button-text").textContent = phase === "ready" ? actor().collection.length === 1 ? "Roll your die" : "Roll your dice" : phase === "rolling" ? "Rolling…" : phase === "resolving" ? "Fighting…" : phase === "rolled" ? "Make your move" : "Battle complete";
+    $("reroll-button").disabled = phase !== "rolled" || !actor().rerolls || actor().selected === null;
+    $("reroll-button").innerHTML = `↻ Reroll selected <span>${actor().rerolls} left</span>`;
+    $("dice-count").textContent = `${actor().collection.length} / ${MAX_DICE}`;
     $("dice-caption").textContent = phase === "rolled" ? "SELECT A DIE TO REROLL, OR MAKE YOUR MOVE" : phase === "rolling" ? "FATE IS DECIDING…" : "BUILD YOUR COLLECTION AT THE NEXT SHOP";
-    $("die-description").textContent = state.selected !== null ? dieDescription(state.dice[state.selected]) : "Six materials, ten effects. Find rare dice and sell old ones at the shop.";
+    $("die-description").textContent = actor().selected !== null ? dieDescription(actor().dice[actor().selected]) : "Six materials, ten effects. Find rare dice and sell old ones at the shop.";
     $("phase-title").textContent = phase === "ready" ? "Make your own luck." : phase === "rolled" ? "Your collection. Your destiny." : phase === "rolling" ? "Let fortune fall." : phase === "resolving" ? "Your fate unfolds." : phase === "lost" ? "The dice will roll again." : "Fortune favors the brave.";
-    $("phase-instruction").textContent = phase === "rolled" ? "Your dice effects are ready. Reroll one, cast an ability, or make your move." : phase === "ready" ? `Roll ${state.collection.length === 1 ? "your die" : `your ${state.collection.length} specialized dice`}. Earn gold to grow your collection.` : phase === "rolling" ? "A little courage. A little luck." : phase === "resolving" ? "Your dice act first. A surviving monster strikes next." : "An expedition is only the beginning.";
-    const incoming = intent.kind === "guard" || enemy.frozen ? 0 : Math.max(0, intent.value - values.chill - state.shield - values.guard);
+    $("phase-instruction").textContent = phase === "rolled" ? `${memberTypes[actor().key].name}'s effects are ready. Choose an enemy, reroll, cast an ability, or fight.` : phase === "ready" ? `${memberTypes[actor().key].name}'s turn. Roll ${actor().collection.length === 1 ? "their die" : `their ${actor().collection.length} dice`}. Every living ally acts before the enemies.` : phase === "rolling" ? "A little courage. A little luck." : phase === "resolving" ? "Watch enemy attacks. Dodge for safety, or parry to counter." : "An expedition is only the beginning.";
     const outgoing = Math.max(0, values.attack - enemy.shield) + values.pierce;
-    const poison = Math.min(12, enemy.poison + values.poison);
-    $("combat-preview").textContent = phase === "rolled" ? `${outgoing} damage${poison ? ` + ${poison} poison` : ""} · ${Math.min(values.mend, state.maxHp - state.hp)} healing · ${outgoing + poison >= enemy.hp ? "lethal — no counterattack!" : `${incoming} incoming damage`}` : "Each die keeps its own role. Attack sixes deal bonus damage.";
+    const healTarget = healingTarget();
+    $("combat-preview").textContent = phase === "rolled" ? `${outgoing} damage${values.poison ? ` +${values.poison} poison` : ""} · ${Math.min(values.mend, healTarget.maxHp - healTarget.hp)} healing to ${memberTypes[healTarget.key].name} · ${outgoing >= enemy.hp ? "lethal strike!" : `target: ${enemy.name}`}` : `${memberTypes[actor().key].perk} Dodge [D] · Parry [P] during enemy strikes.`;
     renderAbilities();
     $("skill-list").innerHTML = Object.entries(state.skills).map(([key, level]) => `<span title="${skills[key].text}">${skills[key].icon} ${skills[key].name} ${level > 1 ? `×${level}` : ""}</span>`).join("");
     saveProgress();
@@ -826,10 +1156,10 @@
   }
 
   function renderDice() {
-    const dice = state.dice.length ? state.dice : state.collection.map((die) => ({ ...die, value: 6 }));
+    const dice = actor().dice.length ? actor().dice : actor().collection.map((die) => ({ ...die, value: 6 }));
     $("dice-tray").innerHTML = dice.map((die, index) => {
       const tier = diceTiers[die.tier];
-      return `<button class="die type-${die.type} tier-${die.tier}${state.phase === "ready" ? " unrolled" : ""}${state.selected === index ? " selected" : ""}${state.phase === "rolling" && (state.rollingIndex === undefined || state.rollingIndex === index) ? " rolling" : ""}" data-index="${index}" data-type="${die.type}" data-tier="${die.tier}" data-value="${die.value}" title="${dieDescription(state.phase === "ready" ? state.collection[index] : die)}" aria-label="${dieName(die)} ${index + 1}: ${state.phase === "ready" ? "not rolled" : `${die.value}${tier.bonus ? ` plus ${tier.bonus} tier bonus` : ""}`}" aria-pressed="${state.selected === index}"${state.phase !== "rolled" ? " disabled" : ""}>${dieMarkup(die.value)}${tier.bonus ? `<span class="die-tier-mark" aria-hidden="true">${tier.icon}<small>+${tier.bonus}</small></span>` : ""}<span class="die-assignment ${die.type}" aria-hidden="true">${diceTypes[die.type].icon}</span><span class="die-type-label" aria-hidden="true">${diceTypes[die.type].label}<small>${tier.name.toUpperCase()}</small></span></button>`;
+      return `<button class="die type-${die.type} tier-${die.tier}${state.phase === "ready" ? " unrolled" : ""}${actor().selected === index ? " selected" : ""}${state.phase === "rolling" && (state.rollingIndex === undefined || state.rollingIndex === index) ? " rolling" : ""}" data-index="${index}" data-type="${die.type}" data-tier="${die.tier}" data-value="${die.value}" title="${dieDescription(state.phase === "ready" ? actor().collection[index] : die)}" aria-label="${dieName(die)} ${index + 1}: ${state.phase === "ready" ? "not rolled" : `${die.value}${tier.bonus ? ` plus ${tier.bonus} tier bonus` : ""}`}" aria-pressed="${actor().selected === index}"${state.phase !== "rolled" ? " disabled" : ""}>${dieMarkup(die.value)}${tier.bonus ? `<span class="die-tier-mark" aria-hidden="true">${tier.icon}<small>+${tier.bonus}</small></span>` : ""}<span class="die-assignment ${die.type}" aria-hidden="true">${diceTypes[die.type].icon}</span><span class="die-type-label" aria-hidden="true">${diceTypes[die.type].label}<small>${tier.name.toUpperCase()}</small></span></button>`;
     }).join("");
   }
 
@@ -845,8 +1175,8 @@
   }
 
   function selectDie(index) {
-    if (practice || state.phase !== "rolled" || !state.dice[index]) return;
-    state.selected = index;
+    if (practice || state.phase !== "rolled" || !actor().dice[index]) return;
+    actor().selected = index;
     render();
     $("dice-tray").children[index].focus({ preventScroll: true });
     playSound("select");
@@ -854,42 +1184,43 @@
 
   async function rollDice(reroll = false) {
     if (practice) return;
-    if (reroll ? state.phase !== "rolled" || !state.rerolls || state.selected === null : state.phase !== "ready") return;
+    if (reroll ? state.phase !== "rolled" || !actor().rerolls || actor().selected === null : state.phase !== "ready") return;
     const run = state.id;
-    const index = reroll ? state.selected : undefined;
+    const index = reroll ? actor().selected : undefined;
     if (reroll) {
-      state.rerolls--;
+      actor().rerolls--;
     } else {
-      state.dice = state.collection.map((die) => ({ ...die, value: 1 }));
-      state.rerolls = 1 + state.extraRerolls;
+      actor().dice = actor().collection.map((die) => ({ ...die, value: 1 }));
+      actor().rerolls = 1 + state.extraRerolls;
     }
     state.phase = "rolling";
     state.rollingIndex = index;
-    state.selected = null;
+    actor().selected = null;
     render();
     playSound("roll");
     for (let frame = 0; frame < 9; frame++) {
-      state.dice.forEach((die, i) => { if (index === undefined || i === index) die.value = rollDie(); });
+      actor().dice.forEach((die, i) => { if (index === undefined || i === index) die.value = rollDie(); });
       renderDice();
       await wait(65 + frame * 5);
       if (state.id !== run) return;
     }
-    state.stats.rolls += reroll ? 1 : state.dice.length;
+    state.stats.rolls += reroll ? 1 : actor().dice.length;
     state.phase = "rolled";
-    state.selected = index === undefined ? 0 : index;
+    actor().selected = index === undefined ? 0 : index;
     delete state.rollingIndex;
     render();
-    if ($("help-overlay").hidden) $("dice-tray").children[state.selected].focus({ preventScroll: true });
-    log(reroll ? `${dieName(state.dice[index])} rerolled: ${state.dice[index].value}.` : `Your dice rolled ${state.dice.map((die) => die.value).join(", ")}. Their effects are ready.`);
+    if ($("help-overlay").hidden) $("dice-tray").children[actor().selected].focus({ preventScroll: true });
+    log(reroll ? `${dieName(actor().dice[index])} rerolled: ${actor().dice[index].value}.` : `Your dice rolled ${actor().dice.map((die) => die.value).join(", ")}. Their effects are ready.`);
   }
 
   function animate(id, className, duration = 550) {
     const element = $(id);
     const run = state.id;
+    const artKey = element.dataset.artKey;
     element.classList.remove("strike", "enemy-strike", "hit");
     void element.offsetWidth;
     element.classList.add(className);
-    setTimeout(() => { if (state.id === run) element.classList.remove(className); }, reducedMotion ? 30 : duration);
+    setTimeout(() => { if (state.id === run && element.dataset.artKey === artKey) element.classList.remove(className); }, reducedMotion ? 30 : duration);
   }
 
   function floatNumber(target, value, kind = "", label = "") {
@@ -906,25 +1237,27 @@
   }
 
   async function resolveTurn() {
-    if (practice || state.phase !== "rolled" || state.dice.length !== state.collection.length) return;
+    if (practice || state.phase !== "rolled" || actor().dice.length !== actor().collection.length) return;
     const run = state.id;
     state.phase = "resolving";
     const values = totals();
     const intent = getIntent();
-    const enemy = state.enemy;
-    state.shield += values.guard;
+    const enemy = targetEnemy();
+    const member = actor();
+    actor().shield += values.guard;
     if (values.gold) {
       addGold(values.gold);
       log(`Fortune dice earn ${values.gold} gold.`);
     }
     render();
     if (values.mend) {
-      const healed = Math.min(state.maxHp - state.hp, values.mend);
-      state.hp += healed;
+      const ally = healingTarget(member);
+      const healed = Math.min(ally.maxHp - ally.hp, values.mend);
+      ally.hp += healed;
       if (healed) {
         floatNumber("hero", `+${healed}`, "heal", "MEND");
         playSound("heal");
-        log(`Your dice restore ${healed} health.`);
+        log(`${memberTypes[member.key].name}'s dice restore ${healed} health to ${memberTypes[ally.key].name}.`);
         render();
         await wait(550);
         if (state.id !== run) return;
@@ -932,7 +1265,7 @@
     }
     if (values.guard) {
       floatNumber("hero", `+${values.guard}`, "block", "SHIELD");
-      log(`Your dice add ${values.guard} shield. ${state.shield} shield is stored.`);
+      log(`Your dice add ${values.guard} shield. ${actor().shield} shield is stored.`);
       playSound("block");
     }
     if (values.chill && intent.kind !== "guard" && !enemy.frozen) {
@@ -958,108 +1291,148 @@
       await wait(650);
       if (state.id !== run) return;
     }
-    if (values.poison) enemy.poison = Math.min(12, enemy.poison + values.poison);
-    if (enemy.hp > 0 && enemy.poison) {
-      const damage = Math.min(enemy.hp, enemy.poison);
-      enemy.hp -= damage;
-      state.stats.damage += damage;
-      enemy.poison = Math.max(0, enemy.poison - 1);
-      floatNumber("enemy", `−${damage}`, "heal", "POISON");
-      log(`Venom deals ${damage} damage through armor.`);
-      render();
-      await wait(500);
-      if (state.id !== run) return;
-    }
+    if (values.poison && enemy.hp) enemy.poison = Math.min(12, enemy.poison + values.poison);
+    enemy.chill += values.chill;
+    member.dice = [];
+    member.selected = null;
+    member.rerolls = 1 + state.extraRerolls;
+    state.acted.push(state.actorIndex);
     if (enemy.hp <= 0) {
-      await victory();
+      await victory(state.target, "party");
       return;
     }
-    if (enemy.frozen) {
-      enemy.frozen = false;
-      floatNumber("enemy", "FROZEN", "block");
-      log(`${enemy.name} is frozen and cannot act.`);
-      render();
-      await wait(500);
-      if (state.id !== run) return;
-    } else if (intent.kind === "guard") {
-      enemy.shield += intent.value;
-      floatNumber("enemy", `+${intent.value}`, "block", "SHIELD");
-      playSound("block");
-      log(`${enemy.name} gains ${intent.value} shield. Break it with your next attack.`);
-      render();
-      await wait(750);
-      if (state.id !== run) return;
-    } else {
-      animate("enemy-art", "enemy-strike");
-      await wait(300);
-      if (state.id !== run) return;
-      const weakened = Math.max(0, intent.value - values.chill);
-      const absorbed = absorbDamage(state.shield, weakened);
-      const blocked = absorbed.blocked;
-      const damage = Math.min(state.hp, absorbed.damage);
-      state.shield = absorbed.shield;
-      state.hp -= damage;
-      if (damage) {
-        floatNumber("hero", `−${damage}`);
-        animate("hero-art", "hit");
-        animate("arena", "impact", 350);
-        playSound("hit");
-      } else {
-        floatNumber("hero", "BLOCK", "block", "GUARDED");
-        playSound("block");
-      }
-      log(`${enemy.name} uses ${intent.name}: ${damage} damage${blocked ? `, ${blocked} absorbed (${state.shield} shield remains)` : ""}${values.chill ? `, ${Math.min(values.chill, intent.value)} weakened by frost` : ""}.`);
-      render();
-      await wait(650);
-      if (state.id !== run) return;
-      if (intent.kind === "drain" && damage) {
-        const healing = Math.min(enemy.maxHp - enemy.hp, Math.ceil(damage / 2));
-        enemy.hp += healing;
-        if (healing) {
-          floatNumber("enemy", `+${healing}`, "heal", "LIFESTEAL");
-          log(`${enemy.name} steals ${healing} health.`);
-          render();
-          await wait(500);
-          if (state.id !== run) return;
-        }
-      }
-    }
-    if (state.hp <= 0) {
-      state.phase = "lost";
-      $("hero-art").classList.add("defeated");
-      playSound("loss");
-      render();
-      await wait(650);
-      if (state.id !== run) return;
-      showEnding(false);
-      return;
-    }
-    state.turn++;
-    state.phase = "ready";
-    state.dice = [];
-    state.selected = null;
-    state.rerolls = 1 + state.extraRerolls;
-    render();
-    if ($("help-overlay").hidden) $("main-button").focus({ preventScroll: true });
+    await nextPartyTurn();
   }
 
-  async function victory() {
-    if (state.phase !== "resolving" || state.enemy.hp > 0) return;
+  async function nextPartyTurn() {
+    const next = livingMembers().find(({ index }) => !state.acted.includes(index));
+    if (next) {
+      state.actorIndex = next.index;
+      state.phase = "ready";
+      if (!targetEnemy().hp) state.target = state.enemies.findIndex((enemy) => enemy.hp > 0);
+      render();
+      $("main-button").focus({ preventScroll: true });
+    } else {
+      state.phase = "resolving";
+      await enemyRound();
+    }
+  }
+
+  async function enemyRound() {
     const run = state.id;
+    for (let i = state.enemyCursor; i < state.enemies.length; i++) {
+      const enemy = state.enemies[i];
+      state.enemyCursor = i + 1;
+      if (!enemy.hp) continue;
+      state.target = i;
+      const intent = getIntent(enemy);
+      state.actorIndex = intent.target;
+      render();
+      if (enemy.poison) {
+        const damage = Math.min(enemy.hp, enemy.poison);
+        enemy.hp -= damage;
+        enemy.poison--;
+        state.stats.damage += damage;
+        floatNumber("enemy", `−${damage}`, "heal", "POISON");
+        log(`Venom deals ${damage} damage to ${enemy.name} through armor.`);
+        render();
+        await wait(400);
+        if (state.id !== run) return;
+        if (!enemy.hp) { await victory(i, "enemies"); return; }
+      }
+      const weakened = Math.max(0, intent.value - enemy.chill);
+      enemy.chill = 0;
+      if (enemy.frozen) {
+        enemy.frozen = false;
+        floatNumber("enemy", "FROZEN", "block");
+        log(`${enemy.name} is frozen and cannot act.`);
+        render();
+        await wait(350);
+      } else if (intent.kind === "guard") {
+        enemy.shield += intent.value;
+        floatNumber("enemy", `+${intent.value}`, "block", "SHIELD");
+        playSound("block");
+        log(`${enemy.name} gains ${intent.value} shield.`);
+        render();
+        await wait(400);
+      } else {
+        const member = actor();
+        const reaction = await defend(`${enemy.name} · ${intent.name}`, `${memberTypes[member.key].name} faces ${weakened} damage. Shield: ${member.shield}.`, false);
+        if (state.id !== run || reaction.cancelled) return;
+        animate("enemy-art", "enemy-strike");
+        const absorbed = absorbDamage(member.shield, reaction.success ? 0 : weakened);
+        const damage = Math.min(member.hp, absorbed.damage);
+        member.shield = absorbed.shield;
+        member.hp -= damage;
+        if (reaction.success) {
+          state.stats[reaction.action === "parry" ? "parries" : "dodges"]++;
+          floatNumber("hero", reaction.action === "parry" ? "PARRY!" : "DODGED", "block");
+          playSound("block");
+          log(`${memberTypes[member.key].name} ${reaction.action === "parry" ? "parries" : "dodges"} ${enemy.name}. No damage, no shield spent.`);
+          if (reaction.action === "parry") {
+            const counter = Math.min(enemy.hp, 4 + state.power);
+            enemy.hp -= counter;
+            state.stats.damage += counter;
+            floatNumber("enemy", `−${counter}`, "critical", "RIPOSTE");
+            log(`Parry counter deals ${counter} damage through shields.`);
+          }
+        } else {
+          floatNumber("hero", damage ? `−${damage}` : "BLOCK", damage ? "" : "block", reaction.action ? `${reaction.timing.toUpperCase()} ${reaction.action.toUpperCase()}` : "");
+          if (damage) { animate("hero-art", "hit"); playSound("hit"); }
+          log(`${reaction.timing === "early" ? "Too early! " : reaction.timing === "late" ? "Too late! " : ""}${memberTypes[member.key].name} takes ${damage} damage from ${enemy.name}${absorbed.blocked ? `; ${absorbed.blocked} shield spent, ${member.shield} left` : ""}.`);
+        }
+        if (intent.kind === "drain" && damage) {
+          const healing = Math.min(enemy.maxHp - enemy.hp, Math.ceil(damage / 2));
+          enemy.hp += healing;
+          log(`${enemy.name} steals ${healing} health.`);
+        }
+        render();
+        await wait(450);
+        if (state.id !== run) return;
+        if (!enemy.hp) { await victory(i, "enemies"); return; }
+        if (!livingMembers().length) {
+          state.phase = "lost";
+          playSound("loss");
+          render();
+          showEnding(false);
+          return;
+        }
+      }
+      if (state.id !== run) return;
+    }
+    state.turn++;
+    state.acted = [];
+    state.enemyCursor = 0;
+    state.actorIndex = livingMembers()[0].index;
+    if (!targetEnemy().hp) state.target = state.enemies.findIndex((enemy) => enemy.hp > 0);
+    state.phase = "ready";
+    render();
+    $("main-button").focus({ preventScroll: true });
+  }
+
+  async function victory(index = state.target, resume = "party") {
+    const enemy = state.enemies[index];
+    if (state.phase !== "resolving" || enemy.hp > 0 || enemy.rewarded) return;
+    const run = state.id;
+    enemy.rewarded = true;
     state.defeated++;
-    state.completed = state.encounter + 1;
+    const won = battleWon();
+    if (won) state.completed = state.encounter + 1;
+    const recruits = won ? recruitCompanions() : [];
     state.phase = "victory";
     const omen = currentOmen();
-    const gold = Math.ceil(state.enemy.gold * (1 + state.lootBonus)) + (omen.gold || 0);
+    const gold = Math.ceil(enemy.gold * (1 + state.lootBonus)) + (omen.gold || 0);
     addGold(gold);
-    const recovery = Math.min(state.maxHp - state.hp, 8 + state.recovery + (omen.recovery || 0));
-    state.hp += recovery;
-    state.reward = { gold, recovery };
+    const recipients = won ? state.party : livingMembers().map(({ member }) => member).sort((a, b) => (b.maxHp - b.hp) - (a.maxHp - a.hp)).slice(0, 1);
+    let recovery = 0;
+    recipients.forEach((member) => { const healing = Math.min(member.maxHp - member.hp, 8 + state.recovery + (omen.recovery || 0)); member.hp += healing; recovery += healing; });
+    if (won) state.party.forEach((member) => { member.dice = []; member.selected = null; });
+    state.reward = { gold, recovery, enemyIndex: index, battleWon: won, resume, recruits };
     $("enemy-art").classList.add("defeated");
     $("ward-aura").classList.remove("visible");
     saveRecord();
     playSound("victory");
-    log(`${state.enemy.name} falls. +${gold} gold${recovery ? `, +${recovery} health` : ""}.`);
+    log(`${enemy.name} falls. +${gold} gold${recovery ? `, +${recovery} party health` : ""}.${recruits.length ? ` ${recruits.map((key) => memberTypes[key].name).join(" and ")} joins your party!` : ""}`);
     closeHelp(false);
     renderReward(false);
     render();
@@ -1071,22 +1444,34 @@
   }
 
   function renderReward(ready) {
-    const { gold, recovery } = state.reward;
-    $("reward-description").textContent = `${state.enemy.name} defeated. Round ${state.encounter + 1} complete. Your spoils have been added to your run.`;
+    const { gold, recovery, enemyIndex, battleWon: won, recruits } = state.reward;
+    $("reward-description").textContent = `${state.enemies[enemyIndex].name} defeated. ${won ? `Round ${state.encounter + 1} complete.` : `${state.enemies.filter((enemy) => enemy.hp > 0).length} enemies remain; this battle continues.`} Your spoils are already in your purse.`;
     $("reward-gold").textContent = `+${gold}`;
     $("reward-health").textContent = recovery ? `+${recovery}` : "FULL";
-    $("reward-health-note").textContent = recovery ? `${state.hp} / ${state.maxHp} HP now` : "Already at maximum health";
+    $("reward-health-note").textContent = recovery ? won ? "Recovery for every ally; downed allies return." : "Recovery for your most injured living ally." : "Your party is already at full health.";
     $("reward-wallet").textContent = `Your purse: ${state.gold} gold`;
-    $("reward-continue").textContent = state.encounter === RUN_LENGTH - 1 ? "Claim victory ↗" : state.encounters[state.encounter + 1].kind === "shop" ? "Enter the market ↗" : "Next round ↗";
+    $("reward-recruit").hidden = !recruits.length;
+    $("reward-recruit").innerHTML = recruits.map((key) => `<span class="recruit-portrait" aria-hidden="true">${namespaceArtwork(memberArtwork(key), `recruit-${key}`)}</span><div><p class="eyebrow">A NEW COMPANION</p><h3>${memberTypes[key].name}, ${memberTypes[key].role}</h3><p>${memberTypes[key].perk} Starts with their own ${dieName({ type: memberTypes[key].die, tier: "base" })} and ${abilities[memberTypes[key].ability].name}.</p></div>`).join("");
+    $("reward-continue").textContent = !won ? "Return to battle ↗" : state.encounter === RUN_LENGTH - 1 ? "Claim victory ↗" : state.encounters[state.encounter + 1].kind === "shop" ? "Enter the market ↗" : "Next round ↗";
     $("reward-continue").disabled = !ready;
     $("reward-overlay").hidden = false;
   }
 
-  function continueVictory() {
+  async function continueVictory() {
     if (state.phase !== "victory" || !state.reward || $("reward-continue").disabled) return;
+    const reward = state.reward;
+    state.phase = "resolving";
     state.reward = null;
     $("reward-overlay").hidden = true;
-    if (state.encounter === RUN_LENGTH - 1) {
+    if (!reward.battleWon) {
+      state.target = state.enemies.findIndex((enemy) => enemy.hp > 0);
+      if (reward.resume.startsWith("ability-")) {
+        state.phase = reward.resume.slice("ability-".length);
+        render();
+        $("main-button").focus({ preventScroll: true });
+      } else if (reward.resume === "enemies") await enemyRound();
+      else await nextPartyTurn();
+    } else if (state.encounter === RUN_LENGTH - 1) {
       state.phase = "won";
       render();
       showEnding(true);
@@ -1104,7 +1489,7 @@
     types.push(newType, shuffle(Object.keys(diceTypes).filter((key) => !types.includes(key) && key !== newType))[0]);
     const offers = [
       ...types.map((key) => ({ kind: "dice", key })),
-      ...shuffle(Object.keys(abilities).filter((key) => !state.abilities.includes(key))).slice(0, 2).map((key) => ({ kind: "ability", key })),
+      ...shuffle(Object.keys(abilities).filter((key) => state.party.some((member) => !member.abilities.includes(key)))).slice(0, 2).map((key) => ({ kind: "ability", key })),
       ...shuffle(Object.keys(skills).filter((key) => (state.skills[key] || 0) < skills[key].max)).slice(0, 4).map((key) => ({ kind: "skill", key }))
     ];
     state.stock = offers.map((offer) => {
@@ -1118,8 +1503,8 @@
   }
 
   function offerUnavailable(offer) {
-    return (offer.kind !== "dice" && offer.bought) || (offer.kind === "dice" && state.collection.length >= MAX_DICE) ||
-      (offer.kind === "ability" && state.abilities.includes(offer.key)) ||
+    return (offer.kind === "skill" && offer.bought) || (offer.kind === "dice" && actor().collection.length >= MAX_DICE) ||
+      (offer.kind === "ability" && actor().abilities.includes(offer.key)) ||
       (offer.kind === "skill" && (state.skills[offer.key] || 0) >= skills[offer.key].max);
   }
 
@@ -1148,9 +1533,11 @@
   }
 
   function renderShop() {
+    $("shop-party").innerHTML = memberCards(true);
+    $("shop-recipient").textContent = `Shopping for ${memberTypes[actor().key].name}: dice and abilities belong to this companion. Skills improve the whole party.`;
     $("shop-purse").innerHTML = `◈ <b>${state.gold}</b><small>GOLD TO SPEND</small>`;
     const levels = Object.values(state.skills).reduce((a, b) => a + b, 0);
-    $("shop-status").textContent = `♡ ${state.hp} / ${state.maxHp} HP · ${state.collection.length} / ${MAX_DICE} dice · ${state.abilities.length} ${state.abilities.length === 1 ? "ability" : "abilities"} · ${levels} skill ${levels === 1 ? "level" : "levels"}`;
+    $("shop-status").textContent = `♡ ${actor().hp} / ${actor().maxHp} HP · ${actor().collection.length} / ${MAX_DICE} dice · ${actor().abilities.length} ${actor().abilities.length === 1 ? "ability" : "abilities"} · ${levels} skill ${levels === 1 ? "level" : "levels"}`;
     $("shop-tabs").querySelectorAll("button").forEach((button) => button.setAttribute("aria-pressed", String(button.dataset.filter === state.shopFilter)));
     if (state.shopFilter === "owned") {
       renderOwnedDice();
@@ -1160,24 +1547,25 @@
         const item = itemDefinition(offer);
         const unavailable = offerUnavailable(offer);
         if (offer.kind === "dice") {
-          const owned = state.collection.filter((die) => die.type === offer.key).length;
+          const owned = actor().collection.filter((die) => die.type === offer.key).length;
           const variants = Object.entries(diceTiers).map(([key, tier]) => {
             const price = offerPrice(offer, key);
-            const count = state.collection.filter((die) => die.type === offer.key && die.tier === key).length;
+            const count = actor().collection.filter((die) => die.type === offer.key && die.tier === key).length;
             const disabled = unavailable || state.gold < price;
             return `<button class="variant-buy variant-${key}" data-offer="${index}" data-tier="${key}" aria-label="Buy ${tier.name} ${item.name} for ${price} gold. Owned ${count}.${unavailable ? " Collection full." : state.gold < price ? " Not enough gold." : ""}"${disabled ? " disabled" : ""}><span class="variant-icon" aria-hidden="true">${tier.icon}</span><span class="variant-copy"><strong>${tier.name}</strong><small>${tier.bonus ? `+${tier.bonus} power` : "Standard power"} · Owned ${count}</small></span><span class="variant-price">${unavailable ? "FULL" : `◈ ${price}`}</span></button>`;
           });
           const rare = `<details class="rare-materials" data-rare-offer="${index}"${state.expandedOffers.has(index) ? " open" : ""}><summary>Rare materials <small>Ruby · Emerald · Obsidian</small></summary><div class="variant-options">${variants.slice(3).join("")}</div></details>`;
           return `<div class="shop-card dice-shop-card type-${offer.key}"><span class="shop-card-icon">${item.icon}</span><span class="shop-card-kind">SPECIALIZED DIE · OWNED ${owned}</span><h3>${item.name}</h3><p>${item.text}</p><div class="variant-options">${variants.slice(0, 3).join("")}</div>${rare}<span class="repeat-purchase-note">BUY MULTIPLE · EACH COPY ROLLS SEPARATELY</span></div>`;
         }
-        const owned = offer.kind === "skill" ? state.skills[offer.key] || 0 : state.abilities.includes(offer.key) ? 1 : 0;
-        const status = offer.bought ? "PURCHASED" : unavailable ? "MAXED / OWNED" : state.gold < offer.price ? "NEED MORE GOLD" : `BUY · ◈ ${offer.price}`;
-        return `<button class="shop-card${offer.bought ? " purchased" : ""}" data-offer="${index}"${unavailable || state.gold < offer.price ? " disabled" : ""}><span class="shop-card-icon">${item.icon}</span><span class="shop-card-kind">${offer.kind === "ability" ? "ACTIVE ABILITY · ONCE / BATTLE" : "PERMANENT SKILL"}${owned ? ` · OWNED ${owned}` : ""}</span><h3>${item.name}</h3><p>${item.text}</p><span class="shop-price">${status}${!unavailable && state.gold < offer.price ? ` · ◈ ${offer.price}` : ""}</span></button>`;
+        const owned = offer.kind === "skill" ? state.skills[offer.key] || 0 : actor().abilities.includes(offer.key) ? 1 : 0;
+        const purchased = offer.kind === "skill" && offer.bought;
+        const status = purchased ? "PURCHASED" : unavailable ? "MAXED / OWNED" : state.gold < offer.price ? "NEED MORE GOLD" : `BUY · ◈ ${offer.price}`;
+        return `<button class="shop-card${purchased ? " purchased" : ""}" data-offer="${index}"${unavailable || state.gold < offer.price ? " disabled" : ""}><span class="shop-card-icon">${item.icon}</span><span class="shop-card-kind">${offer.kind === "ability" ? "THIS MEMBER · ONCE / BATTLE" : "PERMANENT PARTY SKILL"}${owned ? ` · OWNED ${owned}` : ""}</span><h3>${item.name}</h3><p>${item.text}</p><span class="shop-price">${status}${!unavailable && state.gold < offer.price ? ` · ◈ ${offer.price}` : ""}</span></button>`;
       }).join("") : '<p class="empty-stock">You already know all the abilities on offer. Browse dice or skills.</p>';
     }
     $("refresh-shop").disabled = state.refreshed || state.gold < 5;
     $("refresh-shop").textContent = state.refreshed ? "↻ Stock refreshed" : "↻ New stock · 5 gold";
-    $("shop-rest").disabled = state.gold < 8 || state.hp === state.maxHp;
+    $("shop-rest").disabled = state.gold < 8 || actor().hp === actor().maxHp;
     saveProgress();
   }
 
@@ -1195,11 +1583,11 @@
     }
     state.gold -= price;
     if (offer.kind === "dice") {
-      state.collection.push({ id: state.nextDieId++, type: offer.key, tier, paidPrice: price });
-      state.dice = [];
-      state.selected = null;
+      actor().collection.push({ id: state.nextDieId++, type: offer.key, tier, paidPrice: price });
+      actor().dice = [];
+      actor().selected = null;
     }
-    else if (offer.kind === "ability") { offer.bought = true; state.abilities.push(offer.key); }
+    else if (offer.kind === "ability") { actor().abilities.push(offer.key); }
     else {
       offer.bought = true;
       state.skills[offer.key] = (state.skills[offer.key] || 0) + 1;
@@ -1214,8 +1602,8 @@
   }
 
   function saleRestriction(die) {
-    if (state.collection.length === 1) return "Keep at least one die.";
-    if (diceTypes[die.type].offensive && state.collection.filter((owned) => diceTypes[owned.type].offensive).length === 1) {
+    if (actor().collection.length === 1) return "Keep at least one die.";
+    if (diceTypes[die.type].offensive && actor().collection.filter((owned) => diceTypes[owned.type].offensive).length === 1) {
       return "Keep at least one damage-dealing die.";
     }
     return "";
@@ -1223,19 +1611,19 @@
 
   function renderOwnedDice() {
     const tierOrder = Object.keys(diceTiers);
-    const owned = [...state.collection].sort((a, b) => tierOrder.indexOf(a.tier) - tierOrder.indexOf(b.tier));
+    const owned = [...actor().collection].sort((a, b) => tierOrder.indexOf(a.tier) - tierOrder.indexOf(b.tier));
     $("shop-stock").innerHTML = owned.map((die) => {
       const tier = diceTiers[die.tier];
       const refund = Math.floor(die.paidPrice / 2);
       const restriction = saleRestriction(die);
-      const label = restriction ? state.collection.length === 1 ? "KEEP ONE DIE" : "KEEP A DAMAGE DIE" : `Sell · ◈ ${refund}`;
+      const label = restriction ? actor().collection.length === 1 ? "KEEP ONE DIE" : "KEEP A DAMAGE DIE" : `Sell · ◈ ${refund}`;
       return `<div class="shop-card owned-card type-${die.type}"><span class="owned-gem variant-${die.tier}">${tier.icon}<small>${diceTypes[die.type].icon}</small></span><span class="shop-card-kind">YOUR COLLECTION · ${tier.name.toUpperCase()}</span><h3>${dieName(die)}</h3><p>${diceTypes[die.type].text}</p><span class="owned-material variant-${die.tier}">${tier.bonus ? `+${tier.bonus} material power` : "Standard material power"}</span><span class="owned-cost">${die.paidPrice ? `Paid ${die.paidPrice} gold · Refund ${refund}` : "Free starter die · Refund 0"}</span><button class="secondary-button sell-button" data-sell-id="${die.id}" title="${restriction || `Sell for ${refund} gold`}"${restriction ? " disabled" : ""}>${label}</button>${restriction ? `<span class="owned-restriction">${restriction}</span>` : ""}</div>`;
     }).join("");
   }
 
   function openSale(id) {
     if (state.phase !== "shop") return;
-    const die = state.collection.find((owned) => owned.id === id);
+    const die = actor().collection.find((owned) => owned.id === id);
     if (!die) { notify("That die is no longer in your collection."); return; }
     const restriction = saleRestriction(die);
     if (restriction) { notify(restriction); return; }
@@ -1259,16 +1647,16 @@
 
   function sellDie(id) {
     if (state.phase !== "shop") return;
-    const index = state.collection.findIndex((die) => die.id === id);
+    const index = actor().collection.findIndex((die) => die.id === id);
     if (index < 0) { notify("That die is no longer in your collection."); return; }
-    const die = state.collection[index];
+    const die = actor().collection[index];
     const restriction = saleRestriction(die);
     if (restriction) { notify(restriction); return; }
     const refund = Math.floor(die.paidPrice / 2);
-    state.collection.splice(index, 1);
+    actor().collection.splice(index, 1);
     state.gold += refund;
-    state.dice = [];
-    state.selected = null;
+    actor().dice = [];
+    actor().selected = null;
     closeSale(false);
     render();
     renderShop();
@@ -1285,41 +1673,43 @@
     saveRecord();
     state.encounter++;
     loadEncounter();
-    log(`A new chapter. ${state.collection.length} dice at your side.`);
+    log(`A new chapter. ${actor().collection.length} dice at your side.`);
     $("main-button").focus({ preventScroll: true });
   }
 
   function renderAbilities() {
-    $("ability-bar").innerHTML = state.abilities.length ? state.abilities.map((key) => {
-      const used = state.usedAbilities.has(key);
-      const disabled = used || !["ready", "rolled"].includes(state.phase) || (key === "salve" && state.hp === state.maxHp);
-      return `<button class="ability-button" data-ability="${key}" title="${abilities[key].text}"${disabled ? " disabled" : ""}><span>${abilities[key].icon}</span><strong>${abilities[key].name}</strong><small>${used ? "USED" : key === "salve" && state.hp === state.maxHp ? "FULL HP" : "READY"}</small></button>`;
+    $("ability-bar").innerHTML = actor().abilities.length ? actor().abilities.map((key) => {
+      const used = actor().usedAbilities.has(key);
+      const ally = healingTarget();
+      const disabled = used || !["ready", "rolled"].includes(state.phase) || (key === "salve" && ally.hp === ally.maxHp);
+      return `<button class="ability-button" data-ability="${key}" title="${abilities[key].text}"${disabled ? " disabled" : ""}><span>${abilities[key].icon}</span><strong>${abilities[key].name}</strong><small>${used ? "USED" : key === "salve" && ally.hp === ally.maxHp ? "FULL HP" : "READY"}</small></button>`;
     }).join("") : '<p class="empty-abilities">Buy abilities in shop-only rounds: 5, 10, 15, 20, 25, and 30. Each refreshes every battle.</p>';
   }
 
   async function castAbility(key) {
-    if (practice || !state.abilities.includes(key) || state.usedAbilities.has(key) || !["ready", "rolled"].includes(state.phase)) return;
-    if (key === "salve" && state.hp === state.maxHp) return;
+    if (practice || !actor().abilities.includes(key) || actor().usedAbilities.has(key) || !["ready", "rolled"].includes(state.phase)) return;
+    const ally = healingTarget();
+    if (key === "salve" && ally.hp === ally.maxHp) return;
     const run = state.id;
     const previousPhase = state.phase;
-    state.usedAbilities.add(key);
+    actor().usedAbilities.add(key);
     state.phase = "resolving";
     if (key === "fireball") {
-      const damage = Math.min(10, state.enemy.hp);
-      state.enemy.hp -= damage;
+      const damage = Math.min(10, targetEnemy().hp);
+      targetEnemy().hp -= damage;
       state.stats.damage += damage;
       floatNumber("enemy", `−${damage}`, "critical", "EMBER BOLT");
       animate("enemy-art", "hit");
       playSound("hit");
       log(`Ember Bolt deals ${damage} damage through shields.`);
     } else if (key === "salve") {
-      const healing = Math.min(14, state.maxHp - state.hp);
-      state.hp += healing;
+      const healing = Math.min(14, ally.maxHp - ally.hp);
+      ally.hp += healing;
       floatNumber("hero", `+${healing}`, "heal");
       playSound("heal");
-      log(`Healing Spring restores ${healing} health.`);
+      log(`Healing Spring restores ${healing} health to ${memberTypes[ally.key].name}.`);
     } else {
-      state.enemy.frozen = true;
+      targetEnemy().frozen = true;
       floatNumber("enemy", "FROZEN", "block");
       playSound("block");
       log("Frost Seal freezes the enemy's next action.");
@@ -1327,7 +1717,7 @@
     render();
     await wait(600);
     if (state.id !== run) return;
-    if (state.enemy.hp <= 0) { await victory(); return; }
+    if (targetEnemy().hp <= 0) { await victory(state.target, `ability-${previousPhase}`); return; }
     state.phase = previousPhase;
     render();
     if ($("help-overlay").hidden) $("main-button").focus({ preventScroll: true });
@@ -1338,9 +1728,9 @@
     $("end-emblem").textContent = won ? "♛" : "◇";
     $("end-eyebrow").textContent = won ? "THE DARKNESS HAS FALLEN" : "THE END OF AN EXPEDITION";
     $("end-title").textContent = won ? "You defied the darkness." : "Not all luck lasts.";
-    $("end-description").textContent = won ? `All ${RUN_LENGTH} rounds complete: six areas, six markets, and ${BATTLE_COUNT} monsters defeated. Your ${state.collection.length}-dice collection overcame the Starless Sovereign.` : `${state.enemy.name} ended this adventure on round ${state.encounter + 1}. You completed ${state.completed} of ${RUN_LENGTH} rounds and defeated ${state.defeated} of ${BATTLE_COUNT} monsters. A new path awaits.`;
+    $("end-description").textContent = won ? `All ${RUN_LENGTH} rounds complete: six areas, six markets, ${BATTLE_COUNT} battles, and ${state.defeated} monsters defeated. Your party overcame the Starless Sovereign together.` : `${targetEnemy().name} defeated your party on round ${state.encounter + 1}. You completed ${state.completed} of ${RUN_LENGTH} rounds and defeated ${state.defeated} of ${monsterCount()} monsters. A new path awaits.`;
     $("run-stats").innerHTML = [
-      [state.defeated, "MONSTERS SLAIN"], [state.stats.damage, "DAMAGE DEALT"], [state.stats.earned, "GOLD EARNED"]
+      [state.defeated, "MONSTERS SLAIN"], [state.stats.parries, "PERFECT PARRIES"], [state.stats.dodges, "TIMED DODGES"]
     ].map(([value, label]) => `<div class="run-stat"><strong>${value}</strong><span>${label}</span></div>`).join("");
     $("end-overlay").hidden = false;
     $("restart-button").focus({ preventScroll: true });
@@ -1356,11 +1746,15 @@
     { title: "Finish the fight.", text: "Your shield went from 4 to 2, with no health lost. The slime has 4 health left. Roll one last Attack to defeat it before it can hit again.", action: "finish", button: "Finish the slime ↗" },
     { title: "Claim your victory spoils.", text: "Enemies don't counterattack after they die. Collect 24 practice gold and recover 8 health. Shields belong to one battle, so they clear before the next encounter.", action: "collect", button: "Collect practice rewards ↗" },
     { title: "Build a stronger collection.", text: "Every fifth round is a shop, not a fight. Spend 14 of your practice gold on a Guard die. In real runs you start with one Attack die and buy the others.", action: "buy", button: "Buy the Guard die above" },
-    { title: "You're ready to defy the darkness.", text: "Roll, reroll, and make your move. Save unused shield, collect spoils, and upgrade at the shop. Your actual dice, gold, health, progress, and record are exactly as you left them.", action: "done", button: "Return to my run ↗" }
+    { title: "Dodge an incoming strike.", text: "A new practice slime is attacking. Start the strike when ready, then press D or Dodge when the marker reaches the BLUE window. A successful dodge takes no damage and spends no shield. Mistakes are safe here: try again.", action: "dodge", button: "Practice a timed dodge ↗" },
+    { title: "Risk a perfect parry.", text: "Parries have a smaller GOLD timing window. Start the strike, then press P or Parry inside that window. A perfect parry prevents damage and counters through shields. Try Relaxed timing if you want more time.", action: "parry", button: "Practice a timed parry ↗" },
+    { title: "Take a companion's turn.", text: "Every living companion acts once before the enemies. Rescue Mira after round 4 and Sol after round 9. Click Mira to try her own Blood die: her healing looks after your most injured living ally.", action: "party", button: "Choose Mira above" },
+    { title: "Choose the right enemy.", text: "Later fights have up to three enemies. Their health, shields, and poison are separate. Click the weakened Practice Slime to target it instead of the armored wolf. A kill pays rewards, but other enemies stay in the battle.", action: "target", button: "Choose the weakened slime" },
+    { title: "You're ready to defy the darkness.", text: "Control your party's separate turns, pick a target, and roll each member's own dice. Dodge for safety or parry for a counter. Your real party, dice, gold, health, progress, and record are exactly as you left them.", action: "done", button: "Return to my run ↗" }
   ];
 
   function practiceArtwork(markup) {
-    return markup.replace(/id="([^"]+)"/g, (_, id) => `id="practice-${id}"`).replace(/url\(#([^)]+)\)/g, (_, id) => `url(#practice-${id})`);
+    return namespaceArtwork(markup, "practice");
   }
 
   function openTutorial() {
@@ -1384,6 +1778,7 @@
 
   function closeTutorial(restoreFocus = true) {
     if (!practice) return;
+    cancelDefense();
     practice = null;
     $("tutorial-overlay").hidden = true;
     $("practice-dice").replaceChildren();
@@ -1404,20 +1799,22 @@
     $("practice-player-stat").textContent = `${practice.hp} / 40 HP · ⬡ ${practice.shield} shield`;
     $("practice-enemy-stat").textContent = `${practice.enemyHp} / 20 HP · ⬡ ${practice.enemyShield} shield`;
     $("practice-intent").textContent = practice.enemyHp ? "SLIME INTENT · 2 DAMAGE" : "SLIME DEFEATED · NO COUNTERATTACK";
-    $("practice-arena").hidden = practice.step >= 8;
+    $("practice-arena").hidden = practice.step === 8 || practice.step >= 11;
     $("practice-arena").classList.toggle("practice-motion", practice.busy && ["fight", "finish"].includes(practice.action));
-    $("practice-dice").hidden = practice.step >= 8;
+    $("practice-dice").hidden = practice.step >= 8 && practice.step !== 12;
     const dice = practice.dice.length ? practice.dice : ["attack", "guard", "mend"].map((type) => ({ type, tier: "base", value: 6 }));
     const rolling = practice.busy && ["roll", "reroll", "next", "finish"].includes(practice.action);
     $("practice-dice").innerHTML = dice.map((die, i) => `<button class="die type-${die.type} tier-base${rolling ? " rolling" : ""}${!practice.dice.length ? " unrolled" : ""}${practice.step === 1 && i === 0 ? " tutorial-target" : ""}${practice.step === 2 && i === 0 ? " selected" : ""}" data-practice-die="${i}" aria-label="${diceTypes[die.type].name}${practice.dice.length ? `: rolled ${die.value}` : ": not rolled"}"${practice.step !== 1 || i !== 0 || practice.busy ? " disabled" : ""}>${dieMarkup(die.value)}<span class="die-assignment" aria-hidden="true">${diceTypes[die.type].icon}</span><span class="die-type-label" aria-hidden="true">${diceTypes[die.type].label}</span></button>`).join("");
-    $("practice-shop").hidden = practice.step < 8;
+    $("practice-shop").hidden = practice.step !== 8;
+    $("practice-party").hidden = practice.step !== 11;
+    $("practice-targets").hidden = practice.step !== 12;
     $("practice-purse").textContent = `◈ ${practice.gold} practice gold · ${practice.owned} / ${MAX_DICE} dice`;
     $("practice-buy").disabled = practice.step !== 8 || practice.busy;
     $("practice-buy").classList.toggle("tutorial-target", practice.step === 8);
     $("practice-buy-label").textContent = practice.step === 9 ? "PURCHASED · 14 GOLD" : "BUY GUARD · 14 GOLD";
     $("tutorial-action").textContent = practice.busy ? "Practicing…" : step.button;
-    $("tutorial-action").disabled = practice.busy || ["select", "buy"].includes(step.action);
-    const target = practice.busy ? $("tutorial-overlay").querySelector(".modal") : practice.step === 1 ? $("practice-dice").querySelector("button") : practice.step === 8 ? $("practice-buy") : $("tutorial-action");
+    $("tutorial-action").disabled = practice.busy || ["select", "buy", "party", "target"].includes(step.action);
+    const target = practice.busy ? $("tutorial-overlay").querySelector(".modal") : practice.step === 1 ? $("practice-dice").querySelector("button") : practice.step === 8 ? $("practice-buy") : practice.step === 11 ? $("practice-party").querySelector("button:enabled") : practice.step === 12 ? $("practice-targets").querySelector("button:enabled") : $("tutorial-action");
     target.focus({ preventScroll: true });
     saveProgress();
   }
@@ -1436,6 +1833,20 @@
     session.busy = true;
     session.action = action;
     renderTutorial();
+    if (action === "dodge" || action === "parry") {
+      const result = await defend(`Practice ${action}`, "Practice Slime · 2 damage. Mistakes do not harm your real run.", action);
+      if (practice !== session || result.cancelled) return;
+      if (!result.success) {
+        session.busy = false;
+        session.action = null;
+        renderTutorial();
+        notify(result.timing === "early" ? "Too early! Wait for the colored window, then try again." : "That strike got through. Try again in the colored window; practice is safe.");
+        return;
+      }
+      advancePractice(session, action);
+      renderTutorial();
+      return;
+    }
     playSound(["roll", "reroll", "next", "finish"].includes(action) ? "roll" : action === "collect" || action === "buy" ? "heal" : "hit");
     await wait(500);
     if (practice !== session) return;
@@ -1464,14 +1875,17 @@
         session.hp -= retaliation.damage;
       }
     } else if (action === "collect") { session.gold += 24; session.hp = Math.min(40, session.hp + 8); session.shield = 0; }
-    else if (action === "buy") { session.gold -= 14; session.owned++; }
+    else if (action === "buy") { session.gold -= 14; session.owned++; session.enemyHp = 20; session.enemyShield = 0; }
+    else if (action === "parry") session.enemyHp -= 4;
+    else if (action === "party") session.dice = [{ type: "blood", tier: "base", value: 6 }];
+    else if (action === "target") session.enemyHp = 4;
     session.busy = false;
     session.action = null;
     session.step++;
   }
 
   function openHelp() {
-    if (!$("shop-overlay").hidden || !$("end-overlay").hidden || !$("reset-overlay").hidden || !$("sell-overlay").hidden || !$("reward-overlay").hidden || practice) return;
+    if (!$("shop-overlay").hidden || !$("end-overlay").hidden || !$("reset-overlay").hidden || !$("sell-overlay").hidden || !$("reward-overlay").hidden || practice || defense) return;
     helpReturnFocus = document.activeElement;
     $("help-overlay").hidden = false;
     $("help-overlay").querySelector(".modal").scrollTop = 0;
@@ -1510,6 +1924,25 @@
     if (state.phase === "ready") void rollDice();
     else if (state.phase === "rolled") void resolveTurn();
   });
+  $("party-roster").addEventListener("click", (event) => {
+    const button = event.target.closest("[data-member]");
+    if (button) selectMember(Number(button.dataset.member));
+  });
+  $("shop-party").addEventListener("click", (event) => {
+    const button = event.target.closest("[data-member]");
+    if (button) selectMember(Number(button.dataset.member));
+  });
+  $("enemy-roster").addEventListener("click", (event) => {
+    const button = event.target.closest("[data-enemy]");
+    if (button) selectEnemy(Number(button.dataset.enemy));
+  });
+  $("defense-ready").addEventListener("click", armDefense);
+  ["dodge", "parry"].forEach((action) => {
+    $(`defense-${action}`).addEventListener("pointerdown", (event) => { if (event.button === 0) { event.preventDefault(); reactDefense(action); } });
+    $(`defense-${action}`).addEventListener("click", (event) => { if (event.detail === 0) reactDefense(action); });
+  });
+  $("defense-skip").addEventListener("click", () => finishDefense({ action: null, success: false, timing: "skip" }));
+  $("defense-relaxed").addEventListener("change", () => { relaxedTiming = $("defense-relaxed").checked; saveProgress(); });
   $("reroll-button").addEventListener("click", () => { void rollDice(true); });
   $("dice-tray").addEventListener("click", (event) => {
     const die = event.target.closest(".die");
@@ -1553,10 +1986,10 @@
     playSound("roll");
   });
   $("shop-rest").addEventListener("click", () => {
-    if (state.phase !== "shop" || state.gold < 8 || state.hp === state.maxHp) return;
-    const healing = Math.min(12, state.maxHp - state.hp);
+    if (state.phase !== "shop" || state.gold < 8 || actor().hp === actor().maxHp) return;
+    const healing = Math.min(12, actor().maxHp - actor().hp);
     state.gold -= 8;
-    state.hp += healing;
+    actor().hp += healing;
     render();
     renderShop();
     $("leave-shop").focus({ preventScroll: true });
@@ -1591,14 +2024,25 @@
     const die = event.target.closest("[data-practice-die]");
     if (die) selectPracticeDie(Number(die.dataset.practiceDie));
   });
+  $("practice-party").addEventListener("click", (event) => {
+    if (event.target.closest("[data-practice-member]")) void practiceAction("party");
+  });
+  $("practice-targets").addEventListener("click", (event) => {
+    if (event.target.closest("[data-practice-target]")) void practiceAction("target");
+  });
   $("close-help").addEventListener("click", () => closeHelp());
   $("help-play-button").addEventListener("click", () => closeHelp());
   $("help-overlay").addEventListener("click", (event) => {
     if (event.target === $("help-overlay")) closeHelp();
   });
   document.addEventListener("keydown", (event) => {
-    const overlay = ["reset-overlay", "sell-overlay", "reward-overlay", "tutorial-overlay", "help-overlay", "shop-overlay", "end-overlay"].map($).find((element) => !element.hidden);
+    const overlay = ["defense-overlay", "reset-overlay", "sell-overlay", "reward-overlay", "tutorial-overlay", "help-overlay", "shop-overlay", "end-overlay"].map($).find((element) => !element.hidden);
     if (overlay) {
+      if (overlay.id === "defense-overlay" && !event.repeat && !event.ctrlKey && !event.metaKey && !event.altKey) {
+        const key = event.key.toLowerCase();
+        if (key === "d" || key === "p") { event.preventDefault(); reactDefense(key === "d" ? "dodge" : "parry"); return; }
+        if (key === "escape") { event.preventDefault(); finishDefense({ action: null, success: false, timing: "skip" }); return; }
+      }
       if (overlay.id === "tutorial-overlay") {
         if (event.key === "Escape") { event.preventDefault(); closeTutorial(); return; }
         if (!event.repeat && !event.ctrlKey && !event.metaKey && !event.altKey && event.key === "1") { event.preventDefault(); selectPracticeDie(0); return; }
@@ -1617,11 +2061,12 @@
         closeSale();
       }
       if (event.key === "Tab") {
-        const buttons = [...overlay.querySelectorAll("button:not(:disabled), summary")].filter((button) => button.getClientRects().length);
+        const buttons = [...overlay.querySelectorAll("button:not(:disabled), summary, input:not(:disabled)")].filter((button) => button.getClientRects().length);
         if (!buttons.length) { event.preventDefault(); return; }
         const first = buttons[0];
         const last = buttons[buttons.length - 1];
-        if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+        if (!buttons.includes(document.activeElement)) { event.preventDefault(); (event.shiftKey ? last : first).focus(); }
+        else if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
         else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
       }
       return;
@@ -1653,11 +2098,11 @@
   }
 
   document.addEventListener("visibilitychange", () => {
-    if (document.hidden) saveProgress(true);
-    else syncProgress();
+    if (document.hidden) { pauseDefense(); saveProgress(true); }
+    else { syncProgress(); resumeDefense(); }
   });
-  window.addEventListener("pagehide", () => saveProgress(true));
-  window.addEventListener("pageshow", (event) => { if (event.persisted) syncProgress(); });
+  window.addEventListener("pagehide", () => { pauseDefense(); saveProgress(true); });
+  window.addEventListener("pageshow", (event) => { if (event.persisted) { syncProgress(); resumeDefense(); } });
   window.addEventListener("storage", (event) => { if ((event.key === SAVE_KEY || event.key === null) && !document.hidden) syncProgress(); });
   document.addEventListener("scroll", () => {
     clearTimeout(scrollSaveTimer);
