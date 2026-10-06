@@ -4,8 +4,9 @@
   const $ = (id) => document.getElementById(id);
   const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   const MAX_DICE = 6;
-  const RUN_LENGTH = 15;
+  const RUN_LENGTH = 31;
   const SHOP_INTERVAL = 5;
+  const BATTLE_COUNT = RUN_LENGTH - Math.floor(RUN_LENGTH / SHOP_INTERVAL);
   const diceTiers = {
     base: { name: "Base", icon: "◇", bonus: 0, priceMultiplier: 1 },
     gold: { name: "Gold", icon: "✦", bonus: 2, priceMultiplier: 1.8 },
@@ -48,7 +49,10 @@
   const zones = [
     { title: "The Whispering Wilds", label: "CHAPTER I · THE WILDS", className: "forest" },
     { title: "The Hollow Catacombs", label: "CHAPTER II · THE CATACOMBS", className: "crypt" },
-    { title: "The Ember Throne", label: "CHAPTER III · THE INFERNO", className: "inferno" }
+    { title: "The Ember Throne", label: "CHAPTER III · THE INFERNO", className: "inferno" },
+    { title: "The Frostglass Peaks", label: "CHAPTER IV · THE FROSTLANDS", className: "frostlands" },
+    { title: "The Sunken Kingdom", label: "CHAPTER V · THE DROWNED RUINS", className: "sunken" },
+    { title: "The Astral Rift", label: "CHAPTER VI · THE STARLESS SKY", className: "astral" }
   ];
   const monsters = [
     { name: "Moss Slime", zone: 0, type: "slime", color: "#8acb86", moves: [["attack", 1, "Sticky slap"], ["attack", 1.2, "Slime splash"], ["guard", .8, "Gel shell"]] },
@@ -74,7 +78,23 @@
     { name: "Rift Specter", zone: 2, type: "wraith", color: "#c287a1", moves: [["drain", .9, "Rift siphon"], ["guard", .8, "Void shroud"], ["heavy", 1.4, "Reality tear"]] },
     { name: "Flame Cultist", zone: 2, type: "cultist", color: "#b16b65", moves: [["attack", 1, "Flame chant"], ["heavy", 1.4, "Pyre blast"], ["guard", .9, "Ash ward"]] },
     { name: "Azrath, Last Flame", zone: 2, type: "demon", color: "#cd6249", boss: true, moves: [["attack", 1, "Hellfire"], ["drain", .9, "Devour hope"], ["guard", 1, "Infernal aegis"], ["heavy", 1.4, "Last flame"]] },
-    { name: "The Ash Titan", zone: 2, type: "golem", color: "#ab7b70", wings: true, boss: true, moves: [["heavy", 1.5, "Worldbreaker"], ["guard", 1, "Molten armor"], ["drain", .9, "Ember hunger"]] }
+    { name: "The Ash Titan", zone: 2, type: "golem", color: "#ab7b70", wings: true, boss: true, moves: [["heavy", 1.5, "Worldbreaker"], ["guard", 1, "Molten armor"], ["drain", .9, "Ember hunger"]] },
+    { name: "Frostfang Wolf", zone: 3, type: "wolf", color: "#b5dfea", moves: [["attack", 1, "Ice fang"], ["heavy", 1.3, "Whiteout pounce"], ["guard", .8, "Snow veil"]] },
+    { name: "Crystal Wraith", zone: 3, type: "wraith", color: "#9bdcea", moves: [["drain", .8, "Frozen breath"], ["attack", 1.1, "Crystal shard"], ["guard", 1, "Ice mirror"]] },
+    { name: "Glacier Golem", zone: 3, type: "golem", color: "#7ebbc9", moves: [["guard", 1, "Glacier shell"], ["heavy", 1.4, "Avalanche"], ["attack", .9, "Ice hammer"]] },
+    { name: "The Winter Queen", zone: 3, type: "wraith", color: "#c4edff", boss: true, moves: [["heavy", 1.3, "Winter's fury"], ["drain", .9, "Cold embrace"], ["guard", 1, "Frozen crown"]] },
+    { name: "Frostglass Colossus", zone: 3, type: "golem", color: "#98c9e2", boss: true, moves: [["guard", 1.1, "Crystal fortress"], ["heavy", 1.4, "Mountainbreaker"], ["attack", 1, "Glacial fist"]] },
+    { name: "Tide Slime", zone: 4, type: "slime", color: "#65c5b1", moves: [["attack", 1, "Tidal splash"], ["drain", .9, "Undertow"], ["guard", .8, "Coral shell"]] },
+    { name: "Drowned Knight", zone: 4, type: "skeleton", armored: true, color: "#70a89f", moves: [["guard", 1, "Barnacle armor"], ["attack", 1, "Sunken blade"], ["heavy", 1.3, "Anchor smash"]] },
+    { name: "Abyssal Reaver", zone: 4, type: "demon", color: "#599eaa", moves: [["drain", .9, "Deep hunger"], ["heavy", 1.3, "Abyssal claw"], ["guard", .8, "Sea mist"]] },
+    { name: "The Coral King", zone: 4, type: "golem", color: "#83bfb0", boss: true, moves: [["guard", 1.1, "Coral throne"], ["heavy", 1.4, "Crushing tide"], ["drain", .9, "Ocean's hunger"]] },
+    { name: "Queen of the Deep", zone: 4, type: "wraith", color: "#89d6ca", boss: true, moves: [["drain", 1, "Drowned souls"], ["heavy", 1.3, "Maelstrom"], ["guard", .9, "Pearl veil"]] },
+    { name: "Starfang Wolf", zone: 5, type: "wolf", color: "#b8a0dc", moves: [["heavy", 1.3, "Comet pounce"], ["attack", 1, "Starlight bite"], ["guard", .8, "Nebula veil"]] },
+    { name: "Void Wraith", zone: 5, type: "wraith", color: "#b69eea", moves: [["drain", .9, "Star siphon"], ["guard", 1, "Event horizon"], ["heavy", 1.3, "Void pulse"]] },
+    { name: "Riftborn Demon", zone: 5, type: "demon", color: "#a783ca", moves: [["attack", 1.1, "Rift claw"], ["heavy", 1.3, "Meteor strike"], ["guard", .9, "Cosmic shell"]] },
+    { name: "The Comet Titan", zone: 5, type: "golem", color: "#b39aca", wings: true, boss: true, moves: [["heavy", 1.4, "Falling star"], ["guard", 1, "Meteor armor"], ["drain", .9, "Stellar hunger"]] },
+    { name: "The Eclipse Herald", zone: 5, type: "demon", color: "#b990ce", boss: true, moves: [["drain", 1, "Eclipse"], ["heavy", 1.3, "Nightfall"], ["guard", 1, "Moonless ward"]] },
+    { name: "The Starless Sovereign", zone: 5, type: "demon", color: "#d2abea", boss: true, final: true, moves: [["heavy", 1.3, "End of stars"], ["guard", 1, "Void crown"], ["drain", .9, "Consume the sky"], ["attack", 1, "Last light"]] }
   ];
   const omens = [
     { name: "Gilded Skies", text: "+4 gold from every kill", gold: 4 },
@@ -93,26 +113,32 @@
     return result;
   };
   function generateRun() {
-    const health = [8, 10, 12, 15, 23, 27, 33, 39, 45, 60, 54, 63, 72, 83, 115];
-    const damage = [1, 2, 2, 3, 4, 5, 6, 7, 8, 9, 8, 9, 10, 11, 13];
-    return zones.flatMap((zone, zoneIndex) => {
-      const regulars = shuffle(monsters.filter((monster) => monster.zone === zoneIndex && !monster.boss)).slice(0, 4);
-      const boss = shuffle(monsters.filter((monster) => monster.zone === zoneIndex && monster.boss))[0];
-      return [...regulars, boss].map((monster, slot) => {
+    const health = [[8, 10, 12, 23], [27, 33, 39, 60], [54, 63, 72, 115], [80, 90, 105, 145], [110, 125, 140, 190], [140, 155, 175, 235]];
+    const damage = [[1, 2, 2, 4], [5, 6, 7, 9], [8, 9, 10, 13], [9, 10, 11, 14], [10, 11, 12, 15], [11, 12, 13, 16]];
+    const makeBattle = (monster, index, hp, attack) => {
+      const elite = monster.zone > 0 && !monster.boss && Math.random() < .3;
+      const gold = 19 + index * 2 + (monster.boss ? 12 : 0) + (elite ? 6 : 0);
+      return {
+        ...monster, kind: "battle", name: `${elite ? "Frenzied " : ""}${monster.name}`, elite,
+        hp: Math.round(hp * (.94 + Math.random() * .12) * (elite ? 1.1 : 1)),
+        gold: gold + Math.floor(Math.random() * 4),
+        role: monster.final ? "FINAL GUARDIAN" : monster.boss ? "CHAPTER GUARDIAN" : elite ? "FRENZIED CREATURE" : "CREATURE OF THE " + zones[monster.zone].className.toUpperCase(),
+        flavor: monster.final ? "Beyond the last market, the ruler of the rift awaits." : monster.boss ? "The guardian stands between you and a safe haven." : `A new danger awaits in ${zones[monster.zone].title}.`,
+        moveOffset: Math.floor(Math.random() * monster.moves.length),
+        moves: monster.moves.map(([kind, factor, name]) => [kind, Math.max(1, Math.round(attack * factor) + (elite && kind !== "guard" ? 1 : 0)), name])
+      };
+    };
+    const route = zones.flatMap((zone, zoneIndex) => {
+      const regulars = shuffle(monsters.filter((monster) => monster.zone === zoneIndex && !monster.boss)).slice(0, 3);
+      const boss = shuffle(monsters.filter((monster) => monster.zone === zoneIndex && monster.boss && !monster.final))[0];
+      const battles = [...regulars, boss].map((monster, slot) => {
         const index = zoneIndex * SHOP_INTERVAL + slot;
-        const elite = zoneIndex > 0 && !monster.boss && Math.random() < .3;
-        const gold = 19 + index * 2 + (monster.boss ? 12 : 0) + (elite ? 6 : 0);
-        return {
-          ...monster, name: `${elite ? "Frenzied " : ""}${monster.name}`, elite,
-          hp: Math.round(health[index] * (.94 + Math.random() * .12) * (elite ? 1.1 : 1)),
-          gold: gold + Math.floor(Math.random() * 4),
-          role: monster.boss ? "CHAPTER GUARDIAN" : elite ? "FRENZIED CREATURE" : ["CREATURE OF THE WILDS", "RESTLESS DARKNESS", "INFERNAL CREATURE"][zoneIndex],
-          flavor: monster.boss ? "The guardian of this chapter stands before you." : ["A different path. A new danger beneath the trees.", "Something forgotten moves in the darkness.", "The rift has many horrors. This is one of them."][zoneIndex],
-          moveOffset: Math.floor(Math.random() * monster.moves.length),
-          moves: monster.moves.map(([kind, factor, name]) => [kind, Math.max(1, Math.round(damage[index] * factor) + (elite && kind !== "guard" ? 1 : 0)), name])
-        };
+        return makeBattle(monster, index, health[zoneIndex][slot], damage[zoneIndex][slot]);
       });
+      return [...battles, { kind: "shop", name: "The Wayfarer's Market", zone: zoneIndex }];
     });
+    route.push(makeBattle(monsters.find((monster) => monster.final), RUN_LENGTH - 1, 280, 19));
+    return route;
   }
   let state;
   let best = 0;
@@ -142,7 +168,7 @@
 
   function readRecord() {
     try {
-      const stored = Number(localStorage.getItem("diceattack-roguelike-best"));
+      const stored = Number(localStorage.getItem("diceattack-31-round-best"));
       best = Number.isInteger(stored) && stored >= 0 && stored <= RUN_LENGTH ? stored : 0;
     } catch (error) {
       console.warn("Dice Attack cannot read local expedition records.", error);
@@ -156,11 +182,11 @@
   }
 
   function saveRecord() {
-    if (state.defeated <= best) return;
-    best = state.defeated;
+    if (state.completed <= best) return;
+    best = state.completed;
     updateRecord();
     try {
-      localStorage.setItem("diceattack-roguelike-best", String(best));
+      localStorage.setItem("diceattack-31-round-best", String(best));
     } catch (error) {
       console.warn("Dice Attack cannot save the expedition record.", error);
       notify("Your new record could not be saved. Browser storage is unavailable.", "error");
@@ -397,7 +423,7 @@
     const sparks = Array.from({ length: 22 }, (_, i) => {
       const x = (i * 137 + 48) % 1200;
       const y = (i * 73 + 54) % 350;
-      return `<circle class="spark" cx="${x}" cy="${y}" r="${i % 3 ? 1.3 : 2.1}" fill="${zone === 0 ? "#c2df9b" : zone === 1 ? "#a7c6ed" : "#ffb16b"}" style="animation-delay:-${i % 5}s"/>`;
+      return `<circle class="spark" cx="${x}" cy="${y}" r="${i % 3 ? 1.3 : 2.1}" fill="${["#c2df9b", "#a7c6ed", "#ffb16b", "#b6f4ff", "#8debd0", "#dfb7ff"][zone]}" style="animation-delay:-${i % 5}s"/>`;
     }).join("");
     let scene;
     if (zone === 0) {
@@ -425,7 +451,7 @@
         <path d="m470 400 101-95m153 95-92-95M0 354h1200" stroke="#758391" stroke-opacity=".1" stroke-width="2"/>
         <g fill="#57606a" opacity=".5"><path d="m86 317 58-17 54 15-11 14-96 4ZM1009 321l27-22 52 12 24 16-98 7ZM390 298l18-13 27 3 13 13Z"/></g>
         <g><circle cx="206" cy="148" r="38" fill="#91b8de" opacity=".04"/><circle cx="995" cy="148" r="38" fill="#91b8de" opacity=".04"/><path d="m197 173 18-1-2 18h-13Zm789 0 18-1-2 18h-13Z" fill="#6f8293"/><path d="M206 173q-17-16 0-43 13 19 0 43M995 173q-16-18 0-44 14 21 0 44" fill="#a1c5de" opacity=".7"/><path d="M206 170q-6-12 1-20 6 13-1 20M995 170q-6-12 1-20 6 13-1 20" fill="#def9ec"/></g>`;
-    } else {
+    } else if (zone === 2) {
       scene = `
         <rect width="1200" height="400" fill="url(#scene-bg)"/>
         <circle cx="600" cy="168" r="165" fill="#d47144" opacity=".04"/><circle cx="600" cy="168" r="100" fill="#f48e48" opacity=".035"/>
@@ -440,7 +466,32 @@
         <g fill="#493140"><path d="m171 80-8-37 64-1 15 38Zm778-4-9-34 67-1 20 33Z"/><path d="m169 276 65 0 7 14-82 0Zm772 7 82-3 7 17-96 1Z"/></g>
         <g fill="#b75f42" opacity=".6"><path d="m94 327 11-24 10 23-10-8ZM1079 335l11-30 11 25-9-8Z"/><path d="m300 270 7-18 8 22-8-8ZM860 279l10-25 9 22-8-7Z"/></g>`;
     }
-    const color = zone === 0 ? ["#294d42", "#152d31"] : zone === 1 ? ["#293447", "#142231"] : ["#542e31", "#201e2d"];
+    if (zone === 3) {
+      scene = `<rect width="1200" height="400" fill="url(#scene-bg)"/>
+        <path d="M0 92Q250 5 470 88T1200 44" fill="none" stroke="#83eac1" stroke-width="35" opacity=".12"/><path d="M0 125Q290 25 570 105T1200 76" fill="none" stroke="#b99cef" stroke-width="18" opacity=".1"/>
+        <circle cx="835" cy="73" r="34" fill="#dffaff" opacity=".22"/>
+        <path d="M0 300 180 84 310 247 475 43 670 264 880 72 1200 302V400H0Z" fill="#33556b"/><path d="m180 84-54 78 60-20 34 35Zm295-41-71 104 71-35 43 30Zm405 29-74 99 75-30 42 27Z" fill="#c0e8ef" opacity=".7"/>
+        <path d="M0 333Q180 284 350 327T750 316T1200 325V400H0Z" fill="#4c7a86"/><path d="M0 365Q210 334 480 369T1200 351V400H0Z" fill="#9dbfc8" opacity=".3"/>
+        <g fill="#aadff1" opacity=".55"><path d="m94 315 14-70 18 75Zm932 13 23-94 28 87Zm-17 5 9-56 14 54Zm-878-12 9-39 13 40Z"/></g>`;
+    } else if (zone === 4) {
+      scene = `<rect width="1200" height="400" fill="url(#scene-bg)"/>
+        <path d="m340 0 90 321h72L465 0m275 0-42 332h78L876 0" fill="#95e6d0" opacity=".045"/>
+        <path d="M440 306V158Q600 30 760 158V306" fill="#183c43" stroke="#638983" stroke-width="22"/><path d="M475 306V162Q600 72 725 162V306" fill="#14313c"/>
+        <g fill="#416b68"><path d="M184 129h55v174h-55Zm-9-16h73v19h-73Zm-5 190h82v15h-82ZM946 158h53v153h-53Zm-8-17h70v20h-70Zm-8 170h85v16h-85Z"/></g>
+        <path d="M0 328Q190 290 350 320T780 319T1200 310V400H0Z" fill="#284e50"/>
+        <g fill="none" stroke="#c388ab" stroke-width="7" stroke-linecap="round"><path d="M100 340v-51m0 28-20-20m20 8 22-29M1070 345v-62m0 35 22-18m-22 5-18-21"/></g>
+        <g fill="none" stroke="#9ee6d4" opacity=".25"><circle cx="315" cy="93" r="9"/><circle cx="337" cy="144" r="5"/><circle cx="902" cy="86" r="8"/><circle cx="876" cy="180" r="4"/></g>
+        <g fill="#79acb1" opacity=".5"><path d="m750 103 18-7 15 7-15 6Zm32 0 9-8v16ZM385 198l17-8 16 8-16 7Zm31 0 9-7v15Z"/></g>`;
+    } else if (zone === 5) {
+      scene = `<rect width="1200" height="400" fill="url(#scene-bg)"/>
+        <ellipse cx="600" cy="150" rx="176" ry="123" fill="#9866d1" opacity=".08"/><ellipse cx="600" cy="150" rx="124" ry="85" fill="none" stroke="#d6a8ed" stroke-width="2" opacity=".4"/>
+        <ellipse cx="600" cy="150" rx="100" ry="119" fill="none" stroke="#946dd2" stroke-width="3" opacity=".3" transform="rotate(40 600 150)"/><circle cx="600" cy="150" r="67" fill="#100f24"/><circle cx="600" cy="150" r="71" fill="none" stroke="#cfa8ff" stroke-width="3" opacity=".35"/>
+        <g fill="#725c90"><path d="m185 103 41-35 42 39-21 92-39-5Zm774 47 29-28 44 31-13 52-37-4ZM404 257l48-22 66 25-32 20-60 3ZM794 251l37-21 56 29-25 19-47-3Z"/></g>
+        <path d="M0 344 170 319 311 341 421 308 571 333 736 306 896 338 1081 312 1200 340V400H0Z" fill="#30283f"/>
+        <path d="m0 350 170-25 141 22 110-32 150 25 165-27 160 32 185-27 119 28" fill="none" stroke="#c59bef" stroke-width="3" opacity=".3"/>
+        <path d="m243 39 8 19 21 2-17 12 5 21-18-13-18 11 6-20-15-13 20-1ZM1038 66l5 12 13 2-10 8 2 13-11-8-12 7 4-13-9-9 13-1Z" fill="#ecdcff" opacity=".65"/>`;
+    }
+    const color = [["#294d42", "#152d31"], ["#293447", "#142231"], ["#542e31", "#201e2d"], ["#233e58", "#182f42"], ["#245559", "#142f3b"], ["#35264e", "#17182d"]][zone];
     return svgFrame(scene + sparks, `<linearGradient id="scene-bg" x2="0" y2="1"><stop stop-color="${color[0]}"/><stop offset="1" stop-color="${color[1]}"/></linearGradient>`, "0 0 1200 400").replace('<svg xmlns=', '<svg preserveAspectRatio="xMidYMid slice" xmlns=');
   }
 
@@ -448,25 +499,26 @@
     clearInfoToast();
     state = {
       id: ++runSerial, code: Math.random().toString(36).slice(2, 6).padEnd(4, "0").toUpperCase(),
-      encounters: generateRun(), omens: shuffle(omens).slice(0, 3),
-      phase: "ready", encounter: 0, defeated: 0, turn: 1, gold: 0,
+      encounters: generateRun(), omens: shuffle(omens),
+      phase: "ready", encounter: 0, completed: 0, defeated: 0, reward: null, turn: 1, gold: 0,
       hp: 40, maxHp: 40, power: 0, ward: 0, healing: 0, critBonus: 3, recovery: 0,
       extraRerolls: 0, lootBonus: 0, collection: [{ id: 1, type: "attack", tier: "base", paidPrice: 0 }], nextDieId: 2, pendingSale: null, dice: [],
       selected: null, rerolls: 1, enemy: null, abilities: [], usedAbilities: new Set(), skills: {},
       stats: { rolls: 0, damage: 0, criticals: 0, earned: 0 }, stock: [], shopFilter: "all", refreshed: false, expandedOffers: new Set()
     };
-    ["shop-overlay", "sell-overlay", "end-overlay", "reset-overlay", "help-overlay"].forEach((id) => { $(id).hidden = true; });
+    ["shop-overlay", "reward-overlay", "sell-overlay", "end-overlay", "reset-overlay", "help-overlay"].forEach((id) => { $(id).hidden = true; });
     $("hero-art").className = "character-art";
     $("hero-art").innerHTML = heroArtwork();
     $("hero-effects").replaceChildren();
     $("enemy-effects").replaceChildren();
     $("battle-log").replaceChildren();
     loadEncounter();
-    log("One attack die. A different path. The first shop awaits after five victories.");
+    log("One attack die. Six areas to explore. Round 5 is a shop, not a battle.");
   }
 
   function loadEncounter() {
     const definition = state.encounters[state.encounter];
+    if (definition.kind === "shop") { openShop(); return; }
     state.enemy = { ...definition, maxHp: definition.hp, shield: 0, poison: 0, frozen: false };
     state.phase = "ready";
     state.turn = 1;
@@ -474,7 +526,7 @@
     state.selected = null;
     state.rerolls = 1 + state.extraRerolls;
     state.usedAbilities = new Set();
-    const zoneIndex = Math.floor(state.encounter / SHOP_INTERVAL);
+    const zoneIndex = definition.zone;
     const zone = zones[zoneIndex];
     $("zone-title").textContent = zone.title;
     $("area-label").textContent = zone.label;
@@ -483,7 +535,7 @@
     $("enemy-name").textContent = definition.name.replace(/^Frenzied /, "");
     $("enemy-name").title = definition.name;
     $("enemy-role").textContent = definition.role;
-    $("enemy-icon").textContent = definition.boss ? "♛" : ["I", "II", "III"][zoneIndex];
+    $("enemy-icon").textContent = definition.boss ? "♛" : ["I", "II", "III", "IV", "V", "VI"][zoneIndex];
     $("flavor-text").textContent = definition.flavor;
     $("enemy-art").className = `character-art ${definition.type}${definition.boss ? " boss" : ""}`;
     $("enemy-art").innerHTML = definition.type === "slime" ? slimeArtwork(definition) : definition.type === "skeleton" ? skeletonArtwork(definition) : definition.type === "demon" ? demonArtwork(definition) : creatureArtwork(definition);
@@ -528,7 +580,7 @@
   }
 
   function currentOmen() {
-    return state.omens[Math.floor(state.encounter / SHOP_INTERVAL)];
+    return state.omens[state.encounters[state.encounter].zone];
   }
 
   function addGold(amount) {
@@ -539,6 +591,9 @@
   function render() {
     const enemy = state.enemy;
     const intent = getIntent();
+    const app = document.querySelector(".app");
+    app.hidden = state.phase === "shop";
+    app.inert = ["victory", "shop", "won", "lost"].includes(state.phase);
     $("hero-hp").innerHTML = `${state.hp} <small>/ ${state.maxHp}</small>`;
     $("enemy-hp").innerHTML = `${enemy.hp} <small>/ ${enemy.maxHp}${enemy.shield ? ` · ⬡ ${enemy.shield}` : ""}</small>`;
     $("hero-health-fill").style.width = `${state.hp / state.maxHp * 100}%`;
@@ -550,10 +605,14 @@
     $("gold-counter").innerHTML = `◈ <b>${state.gold}</b>`;
     $("gold-counter").setAttribute("aria-label", `${state.gold} gold`);
     const omen = currentOmen();
-    const untilShop = SHOP_INTERVAL - state.defeated % SHOP_INTERVAL;
-    $("run-note").textContent = `RUN ${state.code} · ${omen.name}: ${omen.text} · ${state.encounter >= 10 ? "FINAL CHAPTER" : `SHOP IN ${untilShop} ${untilShop === 1 ? "VICTORY" : "VICTORIES"}`}`;
+    const nextShop = state.encounters.findIndex((round, index) => index >= state.encounter && round.kind === "shop");
+    const untilShop = nextShop - state.completed;
+    $("run-note").textContent = `RUN ${state.code} · ${omen.name}: ${omen.text} · ${state.phase === "shop" ? "SHOP-ONLY ROUND" : nextShop < 0 ? "FINAL GUARDIAN" : `SHOP IN ${untilShop} ${untilShop === 1 ? "VICTORY" : "VICTORIES"}`}`;
     $("turn-counter").textContent = `TURN ${String(state.turn).padStart(2, "0")}${intent.rage ? ` · RAGE +${intent.rage}` : ""}`;
-    $("route").innerHTML = state.encounters.map((encounter, i) => `${i ? '<span class="route-line"></span>' : ""}<span class="route-node${encounter.boss ? " boss" : ""}${i < state.defeated ? " done" : i === state.encounter ? " current" : ""}" aria-label="Encounter ${i + 1}: ${encounter.name}${i < state.defeated ? ", defeated" : i === state.encounter ? ", current" : ""}"${i === state.encounter ? ' aria-current="step"' : ""}><span>${i < state.defeated ? "✓" : encounter.boss ? "♛" : "·"}</span></span>`).join("");
+    $("route").innerHTML = zones.map((zone, chapter) => `<span class="route-chapter" aria-label="${zone.title}">${state.encounters.slice(chapter * SHOP_INTERVAL, chapter === zones.length - 1 ? RUN_LENGTH : (chapter + 1) * SHOP_INTERVAL).map((round, slot) => {
+      const i = chapter * SHOP_INTERVAL + slot;
+      return `${slot ? '<span class="route-line"></span>' : ""}<span class="route-node${round.boss ? " boss" : ""}${round.kind === "shop" ? " shop-node" : ""}${i < state.completed ? " done" : i === state.encounter ? " current" : ""}" data-round="${i + 1}" data-kind="${round.kind}" aria-label="Round ${i + 1}: ${round.name}${i < state.completed ? ", completed" : i === state.encounter ? ", current" : ""}"${i === state.encounter ? ' aria-current="step"' : ""}><span>${i < state.completed ? "✓" : round.kind === "shop" ? "◈" : round.boss ? "♛" : i + 1}</span></span>`;
+    }).join("")}</span>`).join("");
     const intentIcon = intent.kind === "guard" ? "⬡" : intent.kind === "drain" ? "✦" : "⚔";
     const intentSuffix = intent.kind === "guard" ? `gains <strong>${intent.value}</strong> shield` : `<strong>${intent.value}</strong> damage${intent.kind === "drain" ? " + lifesteal" : ""}`;
     $("intent").innerHTML = `<span class="intent-icon">${intentIcon}</span><span>${enemy.frozen ? "FROZEN · next action skipped" : `${intent.name} · ${intentSuffix}`}${enemy.poison ? ` · ❧ ${enemy.poison}` : ""}</span>`;
@@ -814,33 +873,51 @@
   }
 
   async function victory() {
+    if (state.phase !== "resolving" || state.enemy.hp > 0) return;
     const run = state.id;
     state.defeated++;
-    state.phase = state.defeated === RUN_LENGTH ? "won" : "victory";
+    state.completed = state.encounter + 1;
+    state.phase = "victory";
     const omen = currentOmen();
     const gold = Math.ceil(state.enemy.gold * (1 + state.lootBonus)) + (omen.gold || 0);
     addGold(gold);
     const recovery = Math.min(state.maxHp - state.hp, 8 + state.recovery + (omen.recovery || 0));
     state.hp += recovery;
+    state.reward = { gold, recovery };
     $("enemy-art").classList.add("defeated");
     $("ward-aura").classList.remove("visible");
     saveRecord();
     playSound("victory");
     log(`${state.enemy.name} falls. +${gold} gold${recovery ? `, +${recovery} health` : ""}.`);
+    closeHelp(false);
+    $("reward-description").textContent = `${state.enemy.name} defeated. Round ${state.encounter + 1} complete. Your spoils have been added to your run.`;
+    $("reward-gold").textContent = `+${gold}`;
+    $("reward-health").textContent = recovery ? `+${recovery}` : "FULL";
+    $("reward-health-note").textContent = recovery ? `${state.hp} / ${state.maxHp} HP now` : "Already at maximum health";
+    $("reward-wallet").textContent = `Your purse: ${state.gold} gold`;
+    $("reward-continue").textContent = state.encounter === RUN_LENGTH - 1 ? "Claim victory ↗" : state.encounters[state.encounter + 1].kind === "shop" ? "Enter the market ↗" : "Next round ↗";
+    $("reward-continue").disabled = true;
+    $("reward-overlay").hidden = false;
     render();
-    await wait(900);
+    $("reward-overlay").querySelector(".modal").focus({ preventScroll: true });
+    await wait(1000);
     if (state.id !== run) return;
-    if (state.phase === "won") {
+    $("reward-continue").disabled = false;
+    $("reward-continue").focus({ preventScroll: true });
+  }
+
+  function continueVictory() {
+    if (state.phase !== "victory" || !state.reward || $("reward-continue").disabled) return;
+    state.reward = null;
+    $("reward-overlay").hidden = true;
+    if (state.encounter === RUN_LENGTH - 1) {
+      state.phase = "won";
+      render();
       showEnding(true);
-      return;
-    }
-    if (state.defeated % SHOP_INTERVAL === 0) {
-      openShop(gold, recovery);
     } else {
       state.encounter++;
       loadEncounter();
-      notify(`Victory! +${gold} gold${recovery ? ` · +${recovery} HP` : ""} · Shop in ${SHOP_INTERVAL - state.defeated % SHOP_INTERVAL} victories.`);
-      if ($("help-overlay").hidden) $("main-button").focus({ preventScroll: true });
+      if (state.phase === "ready") $("main-button").focus({ preventScroll: true });
     }
   }
 
@@ -874,14 +951,15 @@
     return offer.kind === "dice" ? Math.round(offer.price * diceTiers[tier].priceMultiplier) : offer.price;
   }
 
-  function openShop(gold, recovery) {
+  function openShop() {
     clearInfoToast();
     state.phase = "shop";
     state.shopFilter = "all";
     state.refreshed = false;
     makeStock();
     closeHelp(false);
-    $("shop-description").textContent = `Five enemies defeated. ${state.enemy.name} dropped ${gold} gold${recovery ? ` and you recovered ${recovery} health` : ""}. A new chapter lies ahead. Spend your spoils wisely.`;
+    $("shop-eyebrow").textContent = `ROUND ${state.encounter + 1} / ${RUN_LENGTH} · SHOP ONLY`;
+    $("shop-description").textContent = `A safe haven in ${zones[state.encounters[state.encounter].zone].title}. No monster this round: spend your gold, upgrade your dice, and prepare for ${state.encounter === RUN_LENGTH - 2 ? "the final guardian" : "the next area"}.`;
     $("shop-overlay").hidden = false;
     render();
     renderShop();
@@ -1020,6 +1098,8 @@
     if (state.phase !== "shop") return;
     closeSale(false);
     $("shop-overlay").hidden = true;
+    state.completed = state.encounter + 1;
+    saveRecord();
     state.encounter++;
     loadEncounter();
     log(`A new chapter. ${state.collection.length} dice at your side.`);
@@ -1031,7 +1111,7 @@
       const used = state.usedAbilities.has(key);
       const disabled = used || !["ready", "rolled"].includes(state.phase) || (key === "salve" && state.hp === state.maxHp);
       return `<button class="ability-button" data-ability="${key}" title="${abilities[key].text}"${disabled ? " disabled" : ""}><span>${abilities[key].icon}</span><strong>${abilities[key].name}</strong><small>${used ? "USED" : key === "salve" && state.hp === state.maxHp ? "FULL HP" : "READY"}</small></button>`;
-    }).join("") : '<p class="empty-abilities">Buy abilities at the shop after five victories. Each refreshes every battle.</p>';
+    }).join("") : '<p class="empty-abilities">Buy abilities in shop-only rounds: 5, 10, 15, 20, 25, and 30. Each refreshes every battle.</p>';
   }
 
   async function castAbility(key) {
@@ -1075,7 +1155,7 @@
     $("end-emblem").textContent = won ? "♛" : "◇";
     $("end-eyebrow").textContent = won ? "THE DARKNESS HAS FALLEN" : "THE END OF AN EXPEDITION";
     $("end-title").textContent = won ? "You defied the darkness." : "Not all luck lasts.";
-    $("end-description").textContent = won ? `All fifteen enemies defeated. Your ${state.collection.length}-dice collection overcame the final guardian. Another path, another shop, and another build await in your next run.` : `${state.enemy.name} ended this adventure. You defeated ${state.defeated} of ${RUN_LENGTH} monsters. New enemies, omens, and merchant stock await your next run.`;
+    $("end-description").textContent = won ? `All ${RUN_LENGTH} rounds complete: six areas, six markets, and ${BATTLE_COUNT} monsters defeated. Your ${state.collection.length}-dice collection overcame the Starless Sovereign.` : `${state.enemy.name} ended this adventure on round ${state.encounter + 1}. You completed ${state.completed} of ${RUN_LENGTH} rounds and defeated ${state.defeated} of ${BATTLE_COUNT} monsters. A new path awaits.`;
     $("run-stats").innerHTML = [
       [state.defeated, "MONSTERS SLAIN"], [state.stats.damage, "DAMAGE DEALT"], [state.stats.earned, "GOLD EARNED"]
     ].map(([value, label]) => `<div class="run-stat"><strong>${value}</strong><span>${label}</span></div>`).join("");
@@ -1084,7 +1164,7 @@
   }
 
   function openHelp() {
-    if (!$("shop-overlay").hidden || !$("end-overlay").hidden || !$("reset-overlay").hidden || !$("sell-overlay").hidden) return;
+    if (!$("shop-overlay").hidden || !$("end-overlay").hidden || !$("reset-overlay").hidden || !$("sell-overlay").hidden || !$("reward-overlay").hidden) return;
     helpReturnFocus = document.activeElement;
     $("help-overlay").hidden = false;
     $("close-help").focus({ preventScroll: true });
@@ -1171,6 +1251,7 @@
     log(`Merchant tonic restores ${healing} health for 8 gold.`);
   });
   $("leave-shop").addEventListener("click", leaveShop);
+  $("reward-continue").addEventListener("click", continueVictory);
   $("reset-button").addEventListener("click", openReset);
   $("shop-reset").addEventListener("click", openReset);
   $("cancel-reset").addEventListener("click", cancelReset);
@@ -1194,7 +1275,7 @@
     if (event.target === $("help-overlay")) closeHelp();
   });
   document.addEventListener("keydown", (event) => {
-    const overlay = ["reset-overlay", "sell-overlay", "help-overlay", "shop-overlay", "end-overlay"].map($).find((element) => !element.hidden);
+    const overlay = ["reset-overlay", "sell-overlay", "reward-overlay", "help-overlay", "shop-overlay", "end-overlay"].map($).find((element) => !element.hidden);
     if (overlay) {
       if (event.key === "Escape" && overlay.id === "help-overlay") {
         event.preventDefault();
@@ -1210,6 +1291,7 @@
       }
       if (event.key === "Tab") {
         const buttons = [...overlay.querySelectorAll("button:not(:disabled), summary")].filter((button) => button.getClientRects().length);
+        if (!buttons.length) { event.preventDefault(); return; }
         const first = buttons[0];
         const last = buttons[buttons.length - 1];
         if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }

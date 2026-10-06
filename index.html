@@ -7,8 +7,8 @@
   <meta name="description" content="Roll the dice. Defy the darkness. A turn-based dungeon adventure by Max.">
   <title>Dice Attack — Roll against the darkness</title>
   <link rel="icon" href="favicon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="style.css?v=4">
-  <script src="game.js?v=4" defer></script>
+  <link rel="stylesheet" href="style.css?v=5">
+  <script src="game.js?v=5" defer></script>
 </head>
 <body>
   <noscript><p style="padding: 24px; text-align: center;">Dice Attack needs JavaScript to roll the dice. Enable JavaScript in your browser to play.</p></noscript>
@@ -34,8 +34,8 @@
           <h1 id="zone-title">The Whispering Wilds</h1>
           <p class="run-note" id="run-note"></p>
         </div>
-        <div class="route" id="route" aria-label="Fifteen randomized encounters"></div>
-        <div class="encounter-count"><span id="encounter-number">01</span><span>/ 15<br>ENCOUNTERS</span></div>
+        <div class="route" id="route" aria-label="31 rounds: battles, chapter guardians, and a shop every fifth round"></div>
+        <div class="encounter-count"><span id="encounter-number">01</span><span>/ 31<br>ROUNDS</span></div>
       </section>
 
       <section class="arena forest" id="arena" aria-label="Battle arena">
@@ -104,7 +104,7 @@
   </div>
   <div class="overlay" id="shop-overlay" hidden>
     <section class="modal shop-modal" role="dialog" aria-modal="true" aria-labelledby="shop-title" tabindex="-1">
-      <div class="shop-heading"><div><p class="eyebrow">A MOMENT OF RESPITE</p><h2 id="shop-title">The Wayfarer's Market</h2></div><span class="shop-purse" id="shop-purse"></span></div>
+      <div class="shop-heading"><div><p class="eyebrow" id="shop-eyebrow">A MOMENT OF RESPITE</p><h2 id="shop-title">The Wayfarer's Market</h2></div><span class="shop-purse" id="shop-purse"></span></div>
       <p class="modal-description" id="shop-description"></p>
       <div class="shop-status" id="shop-status"></div>
       <div class="shop-tabs" id="shop-tabs" aria-label="Shop categories">
@@ -113,6 +113,29 @@
       <div class="shop-stock" id="shop-stock"></div>
       <div class="shop-utilities"><button class="secondary-button" id="refresh-shop">↻ New stock · 5 gold</button><button class="secondary-button" id="shop-rest">✚ Restore 12 HP · 8 gold</button></div>
       <div class="shop-footer"><button class="reset-button" id="shop-reset">↻ Reset run</button><p>Six materials. Up to 6 dice.<br>Sell old dice in My dice to make room.</p><button class="primary-button" id="leave-shop">Venture onward <span class="button-arrow">↗</span></button></div>
+    </section>
+  </div>
+  <div class="overlay" id="reward-overlay" hidden>
+    <section class="modal spoils-modal" role="dialog" aria-modal="true" aria-labelledby="reward-title" aria-describedby="reward-description" tabindex="-1">
+      <div class="treasure-scene" aria-hidden="true">
+        <div class="treasure-halo"></div>
+        <span class="treasure-spark" style="--i:0">✦</span><span class="treasure-spark" style="--i:1">◈</span><span class="treasure-spark" style="--i:2">✦</span><span class="treasure-spark" style="--i:3">◈</span><span class="treasure-spark" style="--i:4">✦</span><span class="treasure-spark" style="--i:5">◈</span>
+        <svg class="treasure-chest" viewBox="0 0 180 140" fill="none">
+          <ellipse cx="90" cy="123" rx="68" ry="9" fill="#000" opacity=".25"/>
+          <path d="M30 74h120v45H30Z" fill="#7a4d35" stroke="#e5bd77" stroke-width="3"/><path d="M41 77h15v39H41Zm83 0h15v39h-15Z" fill="#d2a35e"/>
+          <path d="M37 76q53-48 106 0" fill="#fff0a4" opacity=".75"/>
+          <g class="chest-lid"><path d="M30 74V54q0-25 26-25h68q26 0 26 25v20Z" fill="#9a6543" stroke="#e5bd77" stroke-width="3"/><path d="M41 72V53q0-14 15-18v37Zm83-37q15 4 15 18v19h-15Z" fill="#dfb573"/><path d="M31 61h118" stroke="#603d30" stroke-width="3"/></g>
+          <rect x="79" y="73" width="22" height="26" rx="4" fill="#f2ce83"/><path d="m90 79 5 6-5 7-5-7Z" fill="#755632"/>
+        </svg>
+      </div>
+      <p class="eyebrow">FORTUNE FAVORS THE VICTOR</p><h2 id="reward-title">Your victory spoils.</h2>
+      <p class="modal-description" id="reward-description"></p>
+      <div class="spoils-rewards" aria-live="polite">
+        <div class="spoils-item gold-spoils"><span>◈</span><strong id="reward-gold"></strong><small>GOLD EARNED</small></div>
+        <div class="spoils-item health-spoils"><span>✚</span><strong id="reward-health"></strong><small>HEALTH RESTORED</small><p id="reward-health-note"></p></div>
+      </div>
+      <p class="modal-footnote" id="reward-wallet"></p>
+      <button class="primary-button" id="reward-continue" disabled>Next round ↗</button>
     </section>
   </div>
   <div class="overlay" id="sell-overlay" hidden>
@@ -150,9 +173,9 @@
         <p><b>01 <strong>One die. Endless possibilities.</strong></b> Start with one Base Attack die. Roll your whole collection each turn; each die automatically performs its own effect. Duplicate dice each roll separately. Select a rolled die to reroll it. You get one reroll each turn, or two with the Lucky Fingers skill.</p>
         <p><b>02 <strong>Build your collection.</strong></b> Attack dice deal their value as damage, with +3 on a six. Guard blocks; Heal restores health. Venom adds poison, Flame ignores shields, Blood attacks and heals, and Fortune earns gold and blocks. Frost deals half its value, rounded up, through shields and reduces enemy damage by that half-value for this turn. Lightning strikes twice on natural 5s and 6s. Bloom heals half its value, rounded up, and blocks half, rounded down. Hover or select a die for its exact effect.</p>
         <p><b>03 <strong>Choose your dice variants.</strong></b> Every type comes in six materials: Base, Gold +2, Diamond +4, Ruby +6, Emerald +8, and Obsidian +10. Bonuses apply before calculating all effects, including half-roll effects. Criticals and Lightning double strikes depend on the natural roll, not the bonus. Open Rare materials in a shop card to see Ruby, Emerald, and Obsidian.</p>
-        <p><b>04 <strong>Spend your spoils.</strong></b> Every kill earns gold and restores 8 health. Shops open after every five enemies. Buy multiple copies without refreshing, up to six dice total. Each shop stocks at least one Frost, Lightning, or Bloom die. In My dice, sell individual copies for half their purchase price, rounded down, to free a slot. The free starter refunds 0. You must keep at least one damage-dealing die. Abilities refresh each battle; skills last the run. You can also buy healing or refresh stock once per shop.</p>
+        <p><b>04 <strong>Spend your spoils.</strong></b> Every kill opens an animated reward screen showing your gold and health recovery (up to 8 health, improved by skills and omens). Press Continue when ready. Rounds 5, 10, 15, 20, 25, and 30 are shops only: no enemy and no combat. Buy multiple copies, up to six dice total. Every shop stocks a Frost, Lightning, or Bloom die. In My dice, sell copies for half their purchase price, rounded down. The free starter refunds 0. Keep at least one damage-dealing die. Abilities refresh each battle; skills last the run. You can also buy healing or refresh stock once per shop.</p>
         <p><b>05 <strong>Read your enemy.</strong></b> You heal and attack first, poison then ticks, and surviving monsters act. Shields block normal damage, not Flame, Frost, or poison. Poison stacks up to 12 and loses 1 strength each turn. Monsters gain +1 damage every three turns. Frost reduces damage before your guard blocks it, and wears off after this turn. Frost Seal skips the enemy's next action.</p>
-        <p><b>06 <strong>No two paths alike.</strong></b> Each run draws fifteen encounters, three bosses, chapter omens, and merchant stock at random. Omens give a bonus for their chapter. Shops await after enemies 5 and 10; defeating the final boss ends the run. Reset at any time between actions to start a fresh run.</p>
+        <p><b>06 <strong>No two paths alike.</strong></b> Explore 31 rounds across the Whispering Wilds, Hollow Catacombs, Ember Throne, Frostglass Peaks, Sunken Kingdom, and Astral Rift. Each area has three random encounters, a chapter guardian, and a shop. After the last shop, face the Starless Sovereign on round 31. Complete 25 battles and six shop rounds to win. Chapter omens and merchant stock change each run. Your best record counts completed rounds, including shops. Reset between actions for a fresh run.</p>
       </div>
       <p class="modal-footnote">Keyboard: 1–6 select dice · R reroll · Space roll / fight · Escape close instructions / cancel reset or sale</p>
       <button class="primary-button" id="help-play-button">Let fate decide <span class="button-arrow">↗</span></button>

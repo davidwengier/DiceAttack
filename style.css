@@ -43,12 +43,19 @@ h1 { font: 600 clamp(20px, 2.5vw, 28px) "Cinzel", Georgia, serif; margin: 0; let
 .route-node.current { border-color: var(--gold); background: #e2c18018; color: var(--gold); box-shadow: 0 0 18px #e2c18018; }
 .route-node.done { border-color: #67ad9270; background: #67ad9215; color: #8ac9ac; }
 .route-line { width: 18px; height: 1px; background: #8ba5a323; }
+.expedition-header { flex-wrap: wrap; }
+.route { width: 100%; order: 3; flex-wrap: wrap; gap: 10px; }
+.route-chapter { display: flex; align-items: center; flex-shrink: 0; }
+.route-node.shop-node { border-radius: 5px; color: #99d9bd; border-color: #74b79765; background: #74b7970b; }
 .encounter-count { display: flex; align-items: center; gap: 9px; padding-left: 24px; border-left: 1px solid #ffffff12; }
 .encounter-count > span:first-child { font: 500 32px "Cinzel", Georgia, serif; color: var(--gold); }
 .encounter-count > span:last-child { font-size: 8px; letter-spacing: 1.3px; color: #82949b; line-height: 1.7; }
 .arena { height: 392px; overflow: hidden; border-radius: 14px; border: 1px solid #7eaba63a; position: relative; background: #172e2c; box-shadow: 0 25px 70px #0004, inset 0 0 80px #0005; --scene-glow: #78cba2; }
 .arena.crypt { background: #212937; border-color: #8b9abd35; --scene-glow: #8aacf7; }
 .arena.inferno { background: #3a2225; border-color: #ca886740; --scene-glow: #f3975f; }
+.arena.frostlands { background: #1d3446; border-color: #8acddb50; --scene-glow: #a7e8ef; }
+.arena.sunken { background: #163b40; border-color: #70bfac50; --scene-glow: #8fdcc5; }
+.arena.astral { background: #30213f; border-color: #bb97d350; --scene-glow: #ceadf6; }
 .scene-art, .scene-art > svg, .scene-vignette { position: absolute; inset: 0; width: 100%; height: 100%; }
 .scene-art > svg { object-fit: cover; }
 .scene-vignette { background: linear-gradient(90deg, #081b2190, transparent 40%, #08151938), linear-gradient(0deg, #08151fe8, transparent 35%, #081b2150); pointer-events: none; }
@@ -302,6 +309,27 @@ footer { display: flex; justify-content: space-between; gap: 10px; padding: 22px
 .owned-restriction { color: #9da7b7; font-size: 9px; line-height: 1.6; margin-top: 7px; }
 .sell-button { color: var(--gold); border-color: #d0b37555; }
 .sell-modal { z-index: 1; }
+.spoils-modal { max-width: 510px; overflow: hidden; background: radial-gradient(ellipse at 50% 10%, #53604755, transparent 60%), linear-gradient(155deg, #233b3b, #121d2a); }
+.treasure-scene { position: relative; width: 220px; height: 155px; margin: -8px auto 12px; }
+.treasure-halo { position: absolute; inset: -30px; background: radial-gradient(ellipse, #ffe7a433, transparent 65%); animation: treasure-glow 1s ease-out both; }
+.treasure-chest { position: absolute; left: 20px; top: 16px; width: 180px; height: 140px; animation: chest-arrive .6s cubic-bezier(.2,.8,.3,1.2) both; }
+.chest-lid { transform-origin: 30px 74px; animation: chest-open .6s .2s ease-out both; }
+.treasure-spark { position: absolute; left: calc(20px + var(--i) * 34px); top: 76px; color: #f5d68c; font-size: 19px; animation: treasure-burst 1s calc(.15s + var(--i) * .06s) ease-out both; }
+.spoils-rewards { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; margin-top: 22px; }
+.spoils-item { border: 1px solid #dec18040; background: #e2c18008; border-radius: 10px; padding: 17px 10px; animation: reward-arrive .45s .3s ease-out both; }
+.spoils-item > span { display: block; font-size: 23px; color: var(--gold); }
+.spoils-item strong { display: block; font: 700 32px "Cinzel", Georgia, serif; color: #f0d89f; margin: 5px 0; }
+.spoils-item small { display: block; font-size: 8px; letter-spacing: 1px; color: #beae8b; }
+.spoils-item p { font-size: 9px; color: #9bc0ac; margin: 8px 0 0; }
+.health-spoils { border-color: #94ceab40; background: #94ceab08; animation-delay: .45s; }
+.health-spoils > span, .health-spoils strong { color: #b9e4c4; }
+.health-spoils small { color: #9abdac; }
+.spoils-modal .primary-button { margin: 20px auto 0; }
+@keyframes chest-arrive { from { opacity: 0; transform: translateY(24px) scale(.7); } to { opacity: 1; transform: none; } }
+@keyframes chest-open { from { transform: rotate(0); } to { transform: translateY(-14px) rotate(-14deg); } }
+@keyframes treasure-glow { from { opacity: 0; transform: scale(.5); } to { opacity: 1; transform: scale(1.1); } }
+@keyframes treasure-burst { 0% { opacity: 0; transform: translateY(35px) scale(.3); } 40% { opacity: 1; } 100% { opacity: .7; transform: translateY(calc(-25px - var(--i) * 5px)) rotate(15deg); } }
+@keyframes reward-arrive { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
 .shop-utilities { display: flex; gap: 10px; margin: 18px 0 0; }
 .shop-footer { display: flex; justify-content: space-between; gap: 14px; align-items: center; position: sticky; bottom: -35px; padding: 18px 0 8px; margin-top: 10px; background: #14232df5; border-top: 1px solid #9ab1ac20; backdrop-filter: blur(8px); }
 .shop-footer p { margin: 0; font-size: 9px; color: #8da5ae; line-height: 1.6; }
@@ -381,7 +409,7 @@ footer { display: flex; justify-content: space-between; gap: 10px; padding: 22px
   .record { display: none; }
   .expedition-header { flex-wrap: wrap; padding: 21px 4px 18px; gap: 14px; }
   .expedition-header h1 { font-size: 21px; }
-  .route { margin: 0; width: 100%; }
+  .route { margin: 0; width: 100%; gap: 6px; }
   .route-node { width: 19px; height: 19px; }
   .route-line { width: 15px; }
   .eyebrow { font-size: 8px; }
@@ -499,5 +527,5 @@ footer { display: flex; justify-content: space-between; gap: 10px; padding: 22px
   .reset-actions .secondary-button { font-size: 10px; padding: 10px; }
 }
 @media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
+  *, *::before, *::after { animation-duration: .01ms !important; animation-delay: 0s !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
 }
