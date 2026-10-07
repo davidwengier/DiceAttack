@@ -582,57 +582,47 @@ footer { display: flex; justify-content: space-between; gap: 10px; padding: 22px
 .enemy-card:only-child .enemy-portrait { grid-row: 1 / span 4; height: 75px; }
 .practice-choices { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; margin: 22px 0; }
 .practice-choices button { min-height: 95px; }
-.arena.defending { height: 535px; border-color: #a7c7d780; }
-.defending .arena-bottom, .defending #practice-intent { visibility: hidden; }
-.defending .character-art, .defending .practice-avatar { animation: none; }
-.defending .versus { align-self: start; margin: 120px 0 0; }
-.defense-panel { position: absolute; left: 18px; right: 18px; bottom: 12px; z-index: 6; padding: 12px 15px 9px; border: 1px solid #87aac750; border-radius: 10px; background: linear-gradient(120deg, #142d3df5, #111e2cf5); box-shadow: 0 7px 25px #0005; }
-.strike-heading { display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap; gap: 4px 12px; margin-bottom: 9px; }
-.strike-heading strong { font: 600 12px "Cinzel", Georgia, serif; color: #e7e4ce; }
-.strike-heading > span { color: #9fb5be; font-size: 10px; }
-.defense-status { color: #c3d0d0; font-size: 11px; line-height: 1.5; min-height: 17px; margin: 8px 0 0; }
-.relaxed-timing { display: inline-flex; align-items: center; gap: 9px; font-size: 11px; color: #a6bebc; line-height: 1.5; text-align: left; }
-.relaxed-timing input { accent-color: var(--gold); width: 17px; height: 17px; flex-shrink: 0; }
-.defense-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-.reaction-button { border: 1px solid #86c4e070; border-radius: 8px; min-height: 55px; padding: 8px; background: linear-gradient(145deg, #356b8850, #1b3243); box-shadow: inset 0 1px #d3faff22; touch-action: manipulation; }
-.reaction-button strong { display: block; font: 700 16px "Cinzel", Georgia, serif; letter-spacing: 1px; color: #c9ecfc; }
-.reaction-button span { display: block; font-size: 9px; color: #a7c7d7; margin-top: 5px; }
-.reaction-button.parry-button { border-color: var(--gold); background: linear-gradient(145deg, #a58b4550, #373425); }
-.parry-button strong, .parry-button span { color: #f1d49a; }
-.reaction-button:disabled { opacity: .35; }
-[data-reaction="dodge"] .dodge-button, [data-reaction="parry"] .parry-button { opacity: 1; }
-.reaction-button:hover:not(:disabled) { filter: brightness(1.2); }
-.reaction-button kbd { font: 500 10px "DM Sans", sans-serif; padding: 2px 5px; border: 1px solid currentColor; border-radius: 4px; margin-left: 6px; vertical-align: middle; }
-.strike-cue { position: absolute; z-index: 5; left: 50%; top: 42%; width: 84px; height: 84px; display: grid; place-items: center; border: 3px solid #d6e2e3; border-radius: 50%; color: #f1f2df; background: #0f1c31b0; font-weight: 800; font-size: 11px; letter-spacing: 1px; transform: translate(-50%, -50%) scale(calc(1.15 - var(--charge, 0) * .25)); box-shadow: 0 0 24px #b0cbd340; pointer-events: none; }
-[data-cue="dodge"] .strike-cue { border-color: #89dafa; color: #b8efff; box-shadow: 0 0 30px #71c7ff90; }
-[data-cue="parry"] .strike-cue { border-color: #ffe8a0; color: #ffe8a0; box-shadow: 0 0 35px #ffd36a90; }
-[data-cue="dodge"] .dodge-button { border-color: #a5eaff; background: #306d8a; box-shadow: 0 0 17px #8de0ff40; }
-[data-cue="parry"] .parry-button { border-color: #ffe7a0; background: #76613b; box-shadow: 0 0 17px #ffd67a50; }
-[data-reaction="dodge"] #hero-art, [data-reaction="dodge"] #practice-hero-art { opacity: .6; filter: drop-shadow(18px 0 5px #86daff80); }
-[data-reaction="parry"] #hero-art, [data-reaction="parry"] #practice-hero-art { filter: drop-shadow(0 0 18px #ffe29c); }
-[data-reaction="failed"] .defense-status { color: #f2b3a6; }
-.practice-fighter { position: relative; }
-.practice-arena.defending { min-height: 385px; padding-bottom: 180px; }
-.practice-arena .defense-panel { left: 8px; right: 8px; padding: 10px; }
-.practice-arena .strike-cue { width: 66px; height: 66px; font-size: 9px; }
-.practice-arena .strike-heading strong { font-size: 11px; }
-.defense-paused * { animation-play-state: paused !important; }
+.stage-panel { margin-top: 22px; padding: 15px 18px; border: 1px solid #bfa77635; border-radius: 10px; background: linear-gradient(120deg, #3b463425, #18293580); }
+.stage-heading { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; }
+.stage-heading strong { color: var(--gold); font-size: 10px; letter-spacing: 1px; }
+.stage-heading > span { color: #a2b7bd; font-size: 10px; }
+.stage-path { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; margin-top: 14px; }
+.stage-node { display: flex; align-items: center; gap: 9px; min-width: 0; opacity: .4; }
+.stage-node > strong { flex-shrink: 0; width: 28px; height: 28px; border: 1px solid #9ab6b170; border-radius: 50%; display: grid; place-items: center; color: #d4e3dd; font-size: 11px; }
+.stage-node > span { font: 600 9px "Cinzel", Georgia, serif; color: #cad6ca; }
+.stage-node small { display: block; font: 500 6px "DM Sans", sans-serif; color: #9cabb0; margin-top: 5px; letter-spacing: .6px; }
+.current-stage, .completed-stage { opacity: 1; }
+.current-stage > strong { border-color: var(--gold); background: #aa8b3930; color: var(--gold); box-shadow: 0 0 15px #dfbf6220; }
+.completed-stage > strong { border-color: #88c3a1; color: #b0dbb8; }
+.stage-intro { font-size: 11px; line-height: 1.7; color: #b6cfc4; margin: 13px 0 0; }
+.weapon-controls { display: flex; align-items: center; flex-wrap: wrap; gap: 9px; margin: 15px 0; padding: 12px; border: 1px solid #a5c5cd30; border-radius: 8px; background: #19314080; }
+.weapon-controls > span { font-size: 8px; letter-spacing: 1px; color: #aac8cf; margin-right: 3px; }
+.weapon-controls .secondary-button[aria-pressed="true"] { border-color: var(--gold); color: var(--gold); background: #927b3820; }
+.weapon-controls small { color: #9fbdc2; font-size: 10px; line-height: 1.6; }
+.target-warning { border-left: 2px solid #97d5ed; padding: 8px 10px; background: #38627a20; color: #b3dfef; font-size: 11px; line-height: 1.6; }
+.shop-tabs .trading-tab { border-color: #aaceaa70; color: #b6ddb6; }
+.character-art.flying > svg { animation: flight-hover 2s ease-in-out infinite; }
+@keyframes flight-hover { 0%, 100% { transform: translateY(-8px); } 50% { transform: translateY(-17px); } }
 @media (max-width: 540px) {
+  .topbar { height: auto; min-height: 72px; flex-wrap: wrap; gap: 10px; padding: 14px 0; }
+  .top-actions { margin-left: auto; flex-wrap: wrap; }
   .formation-bar { grid-template-columns: 1fr; gap: 16px; margin: 17px 2px; }
   .formation-heading > span { font-size: 8px; }
   .enemy-card strong { font-size: 9px; }
   .enemy-card small { font-size: 7px; }
   .enemy-portrait { height: 47px; }
-  .arena.defending { height: 525px; }
-  .defense-panel { left: 8px; right: 8px; padding: 10px; }
-  .strike-heading strong { font-size: 10px; }
-  .strike-heading > span, .defense-status { font-size: 9px; }
-  .relaxed-timing { font-size: 10px; }
-  .reaction-button strong { font-size: 14px; }
-  .reaction-button span { font-size: 8px; }
+  .stage-panel { padding: 12px; margin-top: 15px; }
+  .stage-path { gap: 5px; }
+  .stage-node { flex-direction: column; align-items: center; text-align: center; gap: 6px; }
+  .stage-node > span { font-size: 7px; overflow-wrap: anywhere; }
+  .stage-node small { display: none; }
+  .stage-intro { font-size: 10px; }
+  .stage-heading strong { font-size: 8px; }
+  .stage-heading > span { font-size: 8px; }
+  .weapon-controls { padding: 10px; gap: 8px; }
+  .weapon-controls small { flex-basis: 100%; }
   .run-stats { gap: 16px; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .strike-cue { transform: translate(-50%, -50%); }
   *, *::before, *::after { animation-duration: .01ms !important; animation-delay: 0s !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
 }
