@@ -33,18 +33,17 @@
     freeze: { name: "Frost Seal", icon: "❄", price: 26, text: "Freeze the enemy, skipping its next action. One free cast per battle." }
   };
   const memberTypes = {
-    knight: { name: "You", title: "THE DICEBOUND", role: "Knight", icon: "⚔", hp: 40, die: "attack", ability: null, joins: 0, color: "#b2d1a0", perk: "Attack sixes deal critical damage." },
-    healer: { name: "Mira", title: "THE LIFEBLOOM", role: "Healer", icon: "✚", hp: 32, die: "blood", ability: "salve", joins: 4, color: "#a9dfc2", perk: "Her healing dice and Healing Spring mend the most injured living ally." },
-    mage: { name: "Sol", title: "THE STARWEAVER", role: "Mage", icon: "✦", hp: 28, die: "flame", ability: "freeze", joins: 9, color: "#c6b1ef", perk: "+2 damage per offensive die. Frost Seal freezes a chosen enemy." }
+    knight: { name: "You", title: "THE DICEBOUND", role: "Knight", icon: "⚔", hp: 40, die: "attack", ability: null, joins: 0, color: "#b2d1a0", perk: "Attack sixes deal critical damage." }
   };
+  const legacyMemberTypes = { ...memberTypes, healer: { hp: 32, joins: 4, ability: "salve" }, mage: { hp: 28, joins: 9, ability: "freeze" } };
   const MEMBER_FIELDS = ["hp", "maxHp", "shield", "collection", "dice", "selected", "rerolls", "abilities", "usedAbilities"];
   const skills = {
     power: { name: "Ember Edge", icon: "⚔", price: 14, max: 3, text: "+1 damage per Attack, Blood, Flame, Frost, and Lightning strike.", apply: () => { state.power++; } },
     ward: { name: "Moonward", icon: "⬡", price: 12, max: 3, text: "+1 shield per Guard, Fortune, and Bloom die.", apply: () => { state.ward++; } },
     healing: { name: "Lifebloom", icon: "✚", price: 12, max: 3, text: "+1 healing per Heal, Blood, and Bloom die.", apply: () => { state.healing++; } },
-    vitality: { name: "Lionheart", icon: "♡", price: 16, max: 3, text: "+8 maximum health for every party member. Restore 8 health each.", apply: () => { state.party.forEach((member) => { member.maxHp += 8; member.hp = Math.min(member.maxHp, member.hp + 8); }); } },
+    vitality: { name: "Lionheart", icon: "♡", price: 16, max: 3, text: "+8 maximum health. Restore 8 health.", apply: () => { actor().maxHp += 8; actor().hp = Math.min(actor().maxHp, actor().hp + 8); } },
     critical: { name: "Loaded Fate", icon: "✦", price: 14, max: 3, text: "+2 extra damage on Attack rolls of six.", apply: () => { state.critBonus += 2; } },
-    recovery: { name: "Second Wind", icon: "❧", price: 16, max: 3, text: "Recover 4 extra health after each kill. Heal every ally for 4 now.", apply: () => { state.recovery += 4; state.party.forEach((member) => { member.hp = Math.min(member.maxHp, member.hp + 4); }); } },
+    recovery: { name: "Second Wind", icon: "❧", price: 16, max: 3, text: "Recover 4 extra health after each kill. Heal for 4 now.", apply: () => { state.recovery += 4; actor().hp = Math.min(actor().maxHp, actor().hp + 4); } },
     luck: { name: "Lucky Fingers", icon: "↻", price: 22, max: 1, text: "A second reroll on every turn.", apply: () => { state.extraRerolls = 1; } },
     loot: { name: "Treasure Hunter", icon: "◈", price: 18, max: 3, text: "+25% kill gold per level, rounded up.", apply: () => { state.lootBonus += .25; } }
   };
@@ -181,6 +180,7 @@
   let savingPaused = false;
   let scrollSaveTimer;
   let defense = null;
+  let combatReturnScroll = null;
   let relaxedTiming = false;
   const wait = (ms) => new Promise((resolve) => setTimeout(resolve, reducedMotion ? Math.min(ms, 25) : ms));
   const rollDie = () => Math.floor(Math.random() * 6) + 1;
@@ -191,24 +191,13 @@
   function battleWon() { return state.enemies.every((enemy) => enemy.hp === 0); }
   function monsterCount() { return state.encounters.reduce((count, round) => count + (round.group?.length || 0), 0); }
   function healingTarget(member = actor()) {
-    return member.key === "healer" ? livingMembers().map(({ member: ally }) => ally).sort((a, b) => (b.maxHp - b.hp) - (a.maxHp - a.hp))[0] || member : member;
+    return member;
   }
   function createMember(key, profile = state) {
     const definition = memberTypes[key];
     const maxHp = definition.hp + (profile.skills.vitality || 0) * 8;
     return { key, hp: maxHp, maxHp, shield: 0, collection: [{ id: profile.nextDieId++, type: definition.die, tier: "base", paidPrice: 0 }], dice: [], selected: null, rerolls: 1 + profile.extraRerolls, abilities: definition.ability ? [definition.ability] : [], usedAbilities: new Set() };
   }
-  function recruitCompanions() {
-    const recruits = [];
-    Object.entries(memberTypes).forEach(([key, definition]) => {
-      if (state.completed >= definition.joins && !state.party.some((member) => member.key === key)) {
-        state.party.push(createMember(key));
-        recruits.push(key);
-      }
-    });
-    return recruits;
-  }
-
   function notify(message, severity = "info") {
     $("toast").textContent = message;
     $("toast").dataset.severity = severity;
@@ -234,7 +223,7 @@
   function saveProgress(force = false) {
     if (!state || restoring || savingPaused || (!force && document.hidden) || !stablePhases.includes(state.phase) || practice?.busy) return;
     const snapshot = {
-      version: 2,
+      version: 3,
       state: { ...state, id: undefined, party: state.party.map((member) => ({ ...member, usedAbilities: [...member.usedAbilities] })), expandedOffers: [...state.expandedOffers] },
       relaxedTiming,
       tutorialSeen, tutorialStep: practice ? practice.step : null,
@@ -319,21 +308,36 @@
     const knight = { key: "knight" };
     MEMBER_FIELDS.forEach((key) => { knight[key] = s[key]; });
     const party = [knight];
-    Object.entries(memberTypes).forEach(([key, definition]) => {
-      if (key !== "knight" && s.completed >= definition.joins) {
-        const member = createMember(key, s);
-        if (s.phase === "lost") member.hp = 0;
-        member.usedAbilities = [];
-        party.push(member);
-      }
-    });
     const next = { ...s, party, actorIndex: 0, acted: [], target: 0, enemyCursor: 0, stats: { ...s.stats, dodges: 0, parries: 0 } };
     MEMBER_FIELDS.forEach((key) => { delete next[key]; });
     delete next.enemy;
     next.encounters = s.encounters.map((round, i) => round.kind === "shop" ? round : i > s.encounter ? addEnemyGroup(round, i % SHOP_INTERVAL) : { ...round, group: [{ ...round }] });
     next.enemies = [{ ...s.enemy, chill: 0, rewarded: s.enemy.hp === 0 }];
-    if (s.reward) next.reward = { ...s.reward, enemyIndex: 0, battleWon: true, resume: "party", recruits: party.slice(1).filter((member) => memberTypes[member.key].joins === s.completed).map((member) => member.key) };
-    return { ...saved, version: 2, state: next, relaxedTiming: false, tutorialStep: saved.tutorialStep === 9 ? tutorialSteps.length - 1 : saved.tutorialStep };
+    if (s.reward) next.reward = { ...s.reward, enemyIndex: 0, battleWon: true, resume: "party", recruits: [] };
+    return { ...saved, version: 3, state: next, relaxedTiming: false, tutorialStep: saved.tutorialStep === 9 ? tutorialSteps.length - 1 : saved.tutorialStep };
+  }
+
+  function upgradePartySave(saved) {
+    validateSave(saved);
+    const s = saved.state;
+    const hero = { ...s.party[0] };
+    const companions = s.party.slice(1);
+    const refund = companions.reduce((total, member) => total + member.collection.reduce((amount, die) => amount + die.paidPrice, 0), 0);
+    hero.abilities = [...new Set([...hero.abilities, ...companions.flatMap((member) => member.abilities.filter((key) => key !== legacyMemberTypes[member.key].ability))])];
+    hero.usedAbilities = [...new Set([...hero.usedAbilities, ...companions.flatMap((member) => member.usedAbilities.filter((key) => key !== legacyMemberTypes[member.key].ability && hero.abilities.includes(key)))])];
+    if (!hero.hp && s.phase !== "lost") hero.hp = Math.min(hero.maxHp, 8 + s.recovery);
+    const next = { ...s, party: [hero], actorIndex: 0, acted: s.acted.filter((index) => index === 0), gold: s.gold + refund, pendingSale: s.actorIndex === 0 ? s.pendingSale : null };
+    if (["ready", "rolled"].includes(s.phase)) {
+      next.acted = [];
+      if (s.actorIndex !== 0) { next.phase = "ready"; hero.dice = []; hero.selected = null; }
+    }
+    if (s.reward) {
+      next.reward = { ...s.reward, recovery: Math.min(s.reward.recovery, hero.maxHp), recruits: [] };
+      if (s.actorIndex !== 0 && s.reward.resume.startsWith("ability-")) next.reward.resume = next.acted.length ? "party" : "ability-ready";
+    }
+    const step = saved.tutorialStep;
+    return { ...saved, version: 3, state: next, tutorialStep: step === null ? null : step >= 11 ? Math.max(11, step - 1) : step,
+      journal: companions.length ? [`Back to a solo adventure. Companion dice refunded: ${refund} gold; purchased abilities transferred.`, ...saved.journal].slice(0, 3) : saved.journal };
   }
 
   function validateSave(saved) {
@@ -342,7 +346,8 @@
     const object = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
     const keys = (list, catalog) => Array.isArray(list) && new Set(list).size === list.length && list.every((key) => typeof key === "string" && Object.hasOwn(catalog, key));
     const die = (value) => object(value) && typeof value.type === "string" && typeof value.tier === "string" && Object.hasOwn(diceTypes, value.type) && Object.hasOwn(diceTiers, value.tier) && integer(value.id, 1) && integer(value.paidPrice);
-    require(object(saved) && saved.version === 2 && object(saved.state) && typeof saved.relaxedTiming === "boolean", "format");
+    require(object(saved) && [2, 3].includes(saved.version) && object(saved.state) && typeof saved.relaxedTiming === "boolean", "format");
+    const catalog = saved.version === 2 ? legacyMemberTypes : memberTypes;
     const s = saved.state;
     require(stablePhases.includes(s.phase) && typeof s.code === "string" && /^[A-Z0-9]{4}$/.test(s.code), "phase or run code");
     require(Array.isArray(s.encounters) && s.encounters.length === RUN_LENGTH, "route");
@@ -361,11 +366,11 @@
     require((s.phase === "shop") === (s.encounters[s.encounter].kind === "shop") && (s.phase !== "won" || s.encounter === RUN_LENGTH - 1), "round phase");
     require(object(s.skills) && Object.entries(s.skills).every(([key, level]) => Object.hasOwn(skills, key) && integer(level, 1, skills[key].max)), "skills");
     require(s.power === (s.skills.power || 0) && s.ward === (s.skills.ward || 0) && s.healing === (s.skills.healing || 0) && s.critBonus === 3 + (s.skills.critical || 0) * 2 && s.recovery === (s.skills.recovery || 0) * 4 && s.lootBonus === (s.skills.loot || 0) * .25 && s.extraRerolls === (s.skills.luck || 0), "skill bonuses");
-    const expectedParty = Object.keys(memberTypes).filter((key) => memberTypes[key].joins <= s.completed);
+    const expectedParty = Object.keys(catalog).filter((key) => catalog[key].joins <= s.completed);
     require(Array.isArray(s.party) && s.party.length === expectedParty.length && s.party.every((member, i) => object(member) && member.key === expectedParty[i]), "party");
     const ids = [];
     s.party.forEach((member) => {
-      require(member.maxHp === memberTypes[member.key].hp + (s.skills.vitality || 0) * 8 && integer(member.hp, 0, member.maxHp) && integer(member.shield) && integer(member.rerolls, 0, 1 + s.extraRerolls), "party health");
+      require(member.maxHp === catalog[member.key].hp + (s.skills.vitality || 0) * 8 && integer(member.hp, 0, member.maxHp) && integer(member.shield) && integer(member.rerolls, 0, 1 + s.extraRerolls), "party health");
       require(Array.isArray(member.collection) && member.collection.length >= 1 && member.collection.length <= MAX_DICE && member.collection.every(die) && member.collection.some((owned) => diceTypes[owned.type].offensive), "member collection");
       ids.push(...member.collection.map((owned) => owned.id));
       require(Array.isArray(member.dice) && (member.dice.length === 0 || member.dice.length === member.collection.length) && member.dice.every((rolled, i) => die(rolled) && ["id", "type", "tier", "paidPrice"].every((key) => rolled[key] === member.collection[i][key]) && integer(rolled.value, 1, 6)), "member dice");
@@ -385,7 +390,7 @@
     });
     const won = s.enemies.every((enemy) => enemy.hp === 0);
     require((!["ready", "rolled", "lost"].includes(s.phase) || !won) && (!["ready", "rolled"].includes(s.phase) || s.enemies[s.target].hp > 0), "enemy target");
-    require(s.phase === "victory" ? object(s.reward) && integer(s.reward.gold, 1) && integer(s.reward.recovery, 0, s.party.reduce((total, ally) => total + ally.maxHp, 0)) && integer(s.reward.enemyIndex, 0, s.enemies.length - 1) && s.enemies[s.reward.enemyIndex].rewarded && s.reward.battleWon === won && ["party", "enemies", "ability-ready", "ability-rolled"].includes(s.reward.resume) && keys(s.reward.recruits, memberTypes) && s.reward.recruits.every((key) => key !== "knight" && s.party.some((ally) => ally.key === key)) : s.reward === null, "reward");
+    require(s.phase === "victory" ? object(s.reward) && integer(s.reward.gold, 1) && integer(s.reward.recovery, 0, s.party.reduce((total, ally) => total + ally.maxHp, 0)) && integer(s.reward.enemyIndex, 0, s.enemies.length - 1) && s.enemies[s.reward.enemyIndex].rewarded && s.reward.battleWon === won && ["party", "enemies", "ability-ready", "ability-rolled"].includes(s.reward.resume) && keys(s.reward.recruits, catalog) && s.reward.recruits.every((key) => key !== "knight" && s.party.some((ally) => ally.key === key)) : s.reward === null, "reward");
     const completed = s.phase === "won" || (s.phase === "victory" && won) ? s.encounter + 1 : s.encounter;
     require(s.completed === completed && (!["shop", "won"].includes(s.phase) || won), "completed rounds");
     const kills = s.encounters.slice(0, completed).reduce((total, round) => total + (round.group?.length || 0), 0) + (s.encounter >= completed && s.phase !== "shop" ? s.enemies.filter((enemy) => enemy.rewarded).length : 0);
@@ -394,7 +399,7 @@
     require(Array.isArray(s.stock) && s.stock.length <= 10 && s.stock.every((offer) => object(offer) && ["dice", "skill", "ability"].includes(offer.kind) && typeof offer.key === "string" && Object.hasOwn(offer.kind === "dice" ? diceTypes : offer.kind === "skill" ? skills : abilities, offer.key) && integer(offer.price, 1) && typeof offer.bought === "boolean"), "market stock");
     require(["all", "dice", "skill", "ability", "owned"].includes(s.shopFilter) && typeof s.refreshed === "boolean" && Array.isArray(s.expandedOffers) && s.expandedOffers.every((index) => integer(index, 0, s.stock.length - 1)), "market state");
     require(s.pendingSale === null || (s.phase === "shop" && member.collection.some((owned) => owned.id === s.pendingSale)), "pending sale");
-    require(typeof saved.tutorialSeen === "boolean" && (saved.tutorialStep === null || (saved.tutorialSeen && ["ready", "rolled"].includes(s.phase) && integer(saved.tutorialStep, 0, tutorialSteps.length - 1))), "tutorial");
+    require(typeof saved.tutorialSeen === "boolean" && (saved.tutorialStep === null || (saved.tutorialSeen && ["ready", "rolled"].includes(s.phase) && integer(saved.tutorialStep, 0, saved.version === 2 ? 13 : tutorialSteps.length - 1))), "tutorial");
     require(Array.isArray(saved.journal) && saved.journal.length <= 3 && saved.journal.every((message) => typeof message === "string" && message.length <= 1000), "journal");
     require(object(saved.view) && typeof saved.view.help === "boolean" && typeof saved.view.reset === "boolean" && ["page", "shop", "tutorial", "instructions"].every((key) => Number.isFinite(saved.view[key]) && saved.view[key] >= 0 && saved.view[key] <= 1000000), "view");
     require((!saved.view.help || ["ready", "rolled"].includes(s.phase)) && (!saved.view.reset || (["ready", "rolled", "shop", "won", "lost"].includes(s.phase) && s.pendingSale === null)) && (!saved.view.help || !saved.view.reset) && (saved.tutorialStep === null || (!saved.view.help && !saved.view.reset)), "open dialog");
@@ -406,10 +411,12 @@
       if (text === null) return false;
       saved = JSON.parse(text);
       if (saved.version === 1) saved = upgradeSave(saved);
+      else if (saved.version === 2) saved = upgradePartySave(saved);
       validateSave(saved);
     } catch (error) { pauseSaving(error); return false; }
     restoring = true;
     cancelDefense();
+    combatReturnScroll = null;
     state = { ...saved.state, id: ++runSerial, party: saved.state.party.map((member) => ({ ...member, usedAbilities: new Set(member.usedAbilities) })), expandedOffers: new Set(saved.state.expandedOffers) };
     const source = state.encounters[state.phase === "shop" ? state.encounter - 1 : state.encounter].group;
     state.enemies = source.map((definition, i) => ({ ...definition, maxHp: definition.hp, ...Object.fromEntries(["hp", "shield", "poison", "frozen", "chill", "rewarded"].map((key) => [key, saved.state.enemies[i][key]])) }));
@@ -567,35 +574,6 @@
       <linearGradient id="hero-metal" x2="1" y2=".6"><stop stop-color="#d2d4ac"/><stop offset=".5" stop-color="#94ad98"/><stop offset="1" stop-color="#527973"/></linearGradient>
       <linearGradient id="hero-blade" x2="1" y2=".3"><stop stop-color="#d4f3e0"/><stop offset=".5" stop-color="#a5d4c5"/><stop offset="1" stop-color="#618e88"/></linearGradient>
       <linearGradient id="hero-shield" x2="1" y2="1"><stop stop-color="#466b58"/><stop offset="1" stop-color="#163936"/></linearGradient>`);
-  }
-
-  function memberArtwork(key) {
-    if (key === "knight") return heroArtwork();
-    const mage = key === "mage";
-    const color = mage ? "#ae91dc" : "#84cbb0";
-    const trim = mage ? "#e8cb86" : "#d6e9ba";
-    return svgFrame(`
-      <ellipse cx="120" cy="229" rx="72" ry="11" fill="${color}" opacity=".16"/>
-      <path d="M85 117q-25 37-35 103l47 12 23-13 24 15 48-16q-18-74-44-102Z" fill="url(#companion-robe)" stroke="#283a48" stroke-width="4"/>
-      <path d="m80 138-10 73 29-8m48-66 25 69-24-6m-29-76v89" stroke="${trim}" stroke-width="3" opacity=".65"/>
-      <path d="m104 217-4 20 17 0 4-18m7 0 6 20 18-1-11-19" fill="#344050" stroke="#a9b9b0" stroke-width="3"/>
-      <path d="m83 108 37-16 38 19-9 47-29 15-32-16Z" fill="${color}" stroke="#344d50" stroke-width="3"/>
-      <path d="m92 115 29 20 28-18m-29 19v26" stroke="${trim}" stroke-width="3"/>
-      <path d="m112 133 9-10 9 11-9 13Z" fill="${trim}"/>
-      <path d="m90 118-17 27-11 21m89-47 12 21 21-2" stroke="${color}" stroke-width="17" stroke-linecap="round"/>
-      <path d="m56 159-6 15 15 4 5-12m105-33 9 12 10-6-5-11" fill="#dfc0a4" stroke="#546766" stroke-width="3"/>
-      <path d="M91 56q2-30 30-31 28 1 31 31l-5 44-26 14-25-16Z" fill="#6c4a52" stroke="#293d45" stroke-width="3"/>
-      <path d="M100 58q20-12 41 0l-2 30-17 16-20-13Z" fill="#e2c1a0" stroke="#9a786b" stroke-width="2"/>
-      <path d="M96 61q3-35 27-28 28 2 25 27l-12-15-16 16-8-15-12 18" fill="${mage ? "#d6b27b" : "#975b52"}"/>
-      <path d="m106 74 8-1m15 0 7 1" stroke="#384652" stroke-width="3" stroke-linecap="round"/>
-      <path d="m118 87 10 0" stroke="#a96f65" stroke-width="2" stroke-linecap="round"/>
-      <path d="m103 51 20-8 15 6" stroke="${trim}" stroke-width="3"/>
-      <path d="M184 63v158" stroke="#534747" stroke-width="9" stroke-linecap="round"/>
-      <path d="M184 65v153" stroke="${trim}" stroke-width="3"/>
-      ${mage ? `<path d="m184 24 18 23-18 26-17-25Z" fill="${color}" stroke="${trim}" stroke-width="3"/><path d="m184 32 0 30m-10-15h21" stroke="#f6eac5" stroke-width="3"/><circle cx="184" cy="48" r="32" stroke="${color}" stroke-width="1" opacity=".3"/>` : `<path d="M196 29a23 23 0 1 0 1 36 18 18 0 0 1-1-36Z" fill="${trim}" stroke="#789d85" stroke-width="2"/><path d="m184 41 5 7-5 7-5-7Z" fill="${color}"/>`}
-      <path d="m76 182 22-6 9 14-3 22-24-1Z" fill="#405454" stroke="${trim}" stroke-width="2"/>
-      <path d="m84 189 13 4m-12 4 11 3" stroke="${color}" stroke-width="2"/>
-    `, `<linearGradient id="companion-robe" x2=".8" y2="1"><stop stop-color="${color}"/><stop offset="1" stop-color="${mage ? "#443a70" : "#284f4d"}"/></linearGradient>`);
   }
 
   function slimeArtwork(enemy) {
@@ -821,6 +799,7 @@
     }
     clearInfoToast();
     cancelDefense();
+    combatReturnScroll = null;
     practice = null;
     $("practice-dice").replaceChildren();
     state = {
@@ -853,6 +832,7 @@
     state.phase = "ready";
     state.turn = 1;
     paintEncounter();
+    restoreCombatView();
   }
 
   function paintEncounter() {
@@ -884,7 +864,7 @@
     if ($("hero-art").dataset.artKey !== heroKey) {
       $("hero-art").dataset.artKey = heroKey;
       $("hero-art").className = `character-art member-${member.key}`;
-      $("hero-art").innerHTML = namespaceArtwork(memberArtwork(member.key), "active");
+      $("hero-art").innerHTML = namespaceArtwork(heroArtwork(), "active");
     }
     $("hero-art").classList.toggle("defeated", member.hp === 0);
     $("hero-name").textContent = definition.name;
@@ -903,19 +883,7 @@
     $("enemy-icon").textContent = enemy.boss ? "♛" : ["I", "II", "III", "IV", "V", "VI"][enemy.zone];
   }
 
-  function memberCards(shop = false) {
-    return Object.entries(memberTypes).map(([key, definition]) => {
-      const index = state.party.findIndex((member) => member.key === key);
-      if (index < 0) return `<div class="party-card locked-member"><span class="party-portrait">${definition.icon}</span><span><strong>${definition.name}</strong><small>Rescue after round ${definition.joins}</small></span></div>`;
-      const member = state.party[index];
-      const disabled = !shop && (practice || state.phase !== "ready" || !member.hp || state.acted.includes(index));
-      return `<button class="party-card${index === state.actorIndex ? " active-member" : ""}${!member.hp ? " downed" : ""}" data-member="${index}" aria-pressed="${index === state.actorIndex}" aria-label="${definition.name}, ${definition.role}, ${member.hp} of ${member.maxHp} health, ${member.collection.length} dice. ${definition.perk}"${disabled ? " disabled" : ""}><span class="party-portrait" aria-hidden="true">${namespaceArtwork(memberArtwork(key), `${shop ? "shop" : "party"}-${key}`)}</span><span class="member-copy"><strong>${definition.name} <em>${definition.role}</em></strong><small>${member.hp} / ${member.maxHp} HP${member.shield ? ` · ⬡ ${member.shield}` : ""}</small><span class="member-health"><i style="width:${member.hp / member.maxHp * 100}%"></i></span><small>${shop ? `${member.collection.length} / 6 dice` : !member.hp ? "DOWNED" : state.acted.includes(index) ? "TURN COMPLETE" : index === state.actorIndex ? "ACTIVE TURN" : "TURN READY"}</small></span></button>`;
-    }).join("");
-  }
-
   function renderFormation() {
-    $("party-roster").innerHTML = memberCards();
-    $("party-turn-label").textContent = `${memberTypes[actor().key].name}'s dice · ${state.acted.length} / ${state.party.length} turns spent`;
     $("enemy-group-label").textContent = `${state.enemies.filter((enemy) => enemy.hp > 0).length} / ${state.enemies.length} alive · click a target`;
     $("enemy-roster").innerHTML = state.enemies.map((enemy, i) => {
       const intent = getIntent(enemy);
@@ -923,16 +891,6 @@
       const disabled = practice || !["ready", "rolled"].includes(state.phase) || !enemy.hp;
       return `<button class="enemy-card${i === state.target ? " targeted" : ""}${!enemy.hp ? " fallen-enemy" : ""}" data-enemy="${i}" aria-pressed="${i === state.target}" aria-label="Target ${enemy.name}, ${enemy.hp} of ${enemy.maxHp} health${enemy.shield ? `, ${enemy.shield} shield` : ""}"${disabled ? " disabled" : ""}><span class="enemy-portrait" aria-hidden="true">${namespaceArtwork(enemyArtwork(enemy), `formation-${i}`)}</span><strong>${enemy.name.replace(/^Frenzied /, "")}</strong><small>${enemy.hp} / ${enemy.maxHp} HP${enemy.shield ? ` · ⬡ ${enemy.shield}` : ""}</small><span class="member-health enemy-health-track"><i style="width:${enemy.hp / enemy.maxHp * 100}%"></i></span><small>${!enemy.hp ? "DEFEATED" : enemy.frozen ? "FROZEN" : intent.kind === "guard" ? `⬡ ${intent.value} shield` : `⚔ ${Math.max(0, intent.value - enemy.chill)} → ${memberTypes[member.key].name}${enemy.chill ? " · ❄" : ""}`}${enemy.poison && enemy.hp ? ` · ❧ ${enemy.poison}` : ""}</small></button>`;
     }).join("");
-  }
-
-  function selectMember(index) {
-    if (practice || !$("reset-overlay").hidden || !state.party[index]) return;
-    if (state.phase === "shop") closeSale(false);
-    else if (state.phase !== "ready" || !state.party[index].hp || state.acted.includes(index)) return;
-    state.actorIndex = index;
-    render();
-    if (state.phase === "shop") renderShop();
-    else $("main-button").focus({ preventScroll: true });
   }
 
   function selectEnemy(index) {
@@ -953,7 +911,7 @@
   function totals() {
     const result = { attack: 0, guard: 0, mend: 0, criticals: 0, pierce: 0, poison: 0, gold: 0, chill: 0, chains: 0 };
     const omen = currentOmen();
-    const power = state.power + (omen.power || 0) + (actor().key === "mage" ? 2 : 0);
+    const power = state.power + (omen.power || 0);
     const ward = state.ward + (omen.ward || 0);
     const healing = state.healing + (omen.healing || 0);
     actor().dice.forEach((die) => {
@@ -992,61 +950,86 @@
   }
 
   function defenseResult(action, progress) {
-    const [start, end] = action === "parry" ? [.78, .9] : [.58, .94];
+    const [start, end] = action === "parry" ? [.73, .87] : [.5, .94];
     return { action, success: progress >= start && progress <= end, timing: progress < start ? "early" : progress > end ? "late" : "perfect" };
   }
 
   function defend(title, description, required = null) {
     cancelDefense();
     return new Promise((resolve) => {
-      defense = { resolve, required, armed: false, paused: false, elapsed: 0, frame: 0 };
+      const arena = $(practice ? "practice-arena" : "arena");
+      const enemyArt = $(practice ? "practice-enemy-art" : "enemy-art");
+      const heroArt = $(practice ? "practice-hero-art" : "hero-art");
+      if (!practice && combatReturnScroll === null) combatReturnScroll = window.scrollY;
+      arena.append($("defense-panel"));
+      enemyArt.parentElement.append($("strike-cue"));
+      arena.classList.add("defending");
+      $("defense-panel").hidden = false;
+      $("strike-cue").hidden = false;
+      const distance = enemyArt.getBoundingClientRect().left - heroArt.getBoundingClientRect().left;
+      defense = { resolve, required, arena, enemyArt, heroArt, distance, result: null, armed: true, duration: relaxedTiming ? 3400 : 2100, startedAt: performance.now(), paused: document.hidden, elapsed: 0, frame: 0 };
       $("defense-title").textContent = title;
       $("defense-description").textContent = description;
-      $("defense-status").textContent = "Ready when you are. Start the strike, then react once as the marker crosses a colored window.";
-      $("defense-meter").dataset.progress = "0";
-      $("defense-meter").setAttribute("aria-valuenow", "0");
-      $("defense-marker").style.left = "0%";
-      $("defense-ready").hidden = false;
-      $("defense-dodge").disabled = true;
-      $("defense-parry").disabled = true;
-      $("defense-relaxed").checked = relaxedTiming;
-      $("defense-relaxed").disabled = false;
-      $("defense-overlay").hidden = false;
-      document.querySelector(".app").inert = true;
-      $("tutorial-overlay").inert = Boolean(practice);
-      $("defense-ready").focus({ preventScroll: true });
+      $("defense-dodge").disabled = required === "parry";
+      $("defense-parry").disabled = required === "dodge";
+      renderDefenseSettings();
+      arena.scrollIntoView({ block: "center", behavior: "instant" });
+      $(required === "parry" ? "defense-parry" : "defense-dodge").focus({ preventScroll: true });
+      paintDefense(0);
+      if (!defense.paused) tickDefense(defense);
     });
   }
 
-  function armDefense() {
-    if (!defense || defense.armed) return;
-    defense.armed = true;
-    defense.duration = relaxedTiming ? 5000 : 2500;
-    defense.startedAt = performance.now();
-    defense.paused = document.hidden;
-    $("defense-ready").hidden = true;
-    $("defense-relaxed").disabled = true;
-    $("defense-dodge").disabled = Boolean(defense.required && defense.required !== "dodge");
-    $("defense-parry").disabled = Boolean(defense.required && defense.required !== "parry");
-    $("defense-status").textContent = defense.required === "parry" ? "Wait for GOLD. Press P or Parry inside the narrow gold window." : "Watch the marker. DODGE [D] in blue; PARRY [P] in gold.";
-    $("defense-overlay").querySelector(".modal").focus({ preventScroll: true });
-    if (!defense.paused) tickDefense(defense);
+  function renderDefenseSettings() {
+    ["defense-relaxed", "practice-relaxed"].forEach((id) => {
+      $(id).checked = relaxedTiming;
+      $(id).disabled = Boolean(defense) || Boolean(practice?.busy);
+    });
+  }
+
+  function restoreCombatView() {
+    if (combatReturnScroll !== null) {
+      window.scrollTo(0, combatReturnScroll);
+      combatReturnScroll = null;
+    }
+  }
+
+  function paintDefense(progress) {
+    const session = defense;
+    const cue = progress < .5 ? "windup" : progress < .73 ? "dodge" : progress <= .87 ? "parry" : progress <= .94 ? "dodge" : "impact";
+    session.arena.dataset.cue = cue;
+    $("defense-panel").dataset.progress = String(progress);
+    $("strike-cue").style.setProperty("--charge", String(progress));
+    const result = session.result;
+    const label = result ? result.success ? result.action === "parry" ? "PARRIED" : "DODGED" : "!" : cue === "windup" ? "!" : cue === "parry" ? "PARRY" : cue === "dodge" ? "DODGE" : "STRIKE";
+    const status = result ? result.success ? result.action === "parry" ? "Perfect parry! Counter incoming." : "Clean dodge! No damage." : result.timing === "early" ? "Too early! Your shield will absorb the strike." : "The strike got through. Your shield still protects you." : cue === "windup" ? "Watch the wind-up. Wait for blue or gold." : cue === "parry" ? "PARRY NOW [P] — or dodge safely [D]" : cue === "dodge" ? progress > .87 ? "Last chance to dodge [D]!" : session.required === "parry" ? "Wait for the gold parry flash…" : "DODGE NOW [D] — gold parry flash next" : "Impact!";
+    if ($("strike-cue").textContent !== label) $("strike-cue").textContent = label;
+    if ($("defense-status").textContent !== status) $("defense-status").textContent = status;
+    if (!reducedMotion) {
+      const lunge = progress < .73 ? 0 : progress < .9 ? ((progress - .73) / .17) ** 2 : Math.max(0, (1 - progress) / .1);
+      const pull = progress < .73 ? Math.sin(progress / .73 * Math.PI / 2) * 18 : 0;
+      session.enemyArt.style.transform = `translateX(${pull - session.distance * lunge}px) rotate(${progress < .73 ? progress * 8 : -8 * lunge}deg)`;
+      session.heroArt.style.transform = result?.success ? result.action === "dodge" ? "translate(-38px, -12px) rotate(-12deg)" : "rotate(-8deg)" : "";
+    }
   }
 
   function tickDefense(session) {
     if (defense !== session) return;
     if (document.hidden) { pauseDefense(); return; }
     const progress = Math.min(1, (performance.now() - session.startedAt) / session.duration);
-    $("defense-meter").dataset.progress = String(progress);
-    $("defense-meter").setAttribute("aria-valuenow", String(Math.round(progress * 100)));
-    $("defense-marker").style.left = `${progress * 100}%`;
-    if (progress >= 1) { finishDefense({ action: null, success: false, timing: "missed" }); return; }
+    paintDefense(progress);
+    if (progress >= 1) { finishDefense(session.result || { action: null, success: false, timing: "missed" }); return; }
     session.frame = requestAnimationFrame(() => tickDefense(session));
   }
 
   function reactDefense(action) {
-    if (!defense?.armed || defense.paused || document.hidden || (defense.required && defense.required !== action)) return;
-    finishDefense(defenseResult(action, (performance.now() - defense.startedAt) / defense.duration));
+    if (!defense || defense.result || defense.paused || document.hidden || (defense.required && defense.required !== action)) return;
+    const progress = (performance.now() - defense.startedAt) / defense.duration;
+    defense.result = defenseResult(action, progress);
+    defense.arena.dataset.reaction = defense.result.success ? action : "failed";
+    $("defense-dodge").disabled = true;
+    $("defense-parry").disabled = true;
+    paintDefense(progress);
   }
 
   function finishDefense(result) {
@@ -1054,9 +1037,16 @@
     const session = defense;
     cancelAnimationFrame(session.frame);
     defense = null;
-    $("defense-overlay").hidden = true;
-    $("tutorial-overlay").inert = false;
-    document.querySelector(".app").inert = Boolean(practice) || ["victory", "shop", "won", "lost"].includes(state.phase);
+    session.enemyArt.style.transform = "";
+    session.heroArt.style.transform = "";
+    session.arena.classList.remove("defending", "defense-paused");
+    delete session.arena.dataset.cue;
+    delete session.arena.dataset.reaction;
+    $("defense-panel").hidden = true;
+    $("strike-cue").hidden = true;
+    $("arena").append($("defense-panel"));
+    $("enemy-stage").append($("strike-cue"));
+    renderDefenseSettings();
     session.resolve(result);
   }
 
@@ -1068,6 +1058,7 @@
     if (!defense?.armed || defense.paused) return;
     defense.elapsed = Math.min(1, (performance.now() - defense.startedAt) / defense.duration);
     defense.paused = true;
+    defense.arena.classList.add("defense-paused");
     cancelAnimationFrame(defense.frame);
   }
 
@@ -1075,6 +1066,7 @@
     if (!defense?.armed || !defense.paused) return;
     defense.startedAt = performance.now() - defense.elapsed * defense.duration;
     defense.paused = false;
+    defense.arena.classList.remove("defense-paused");
     tickDefense(defense);
   }
 
@@ -1083,6 +1075,7 @@
     const intent = getIntent();
     paintCombatants();
     renderFormation();
+    renderDefenseSettings();
     const app = document.querySelector(".app");
     app.hidden = state.phase === "shop";
     app.inert = Boolean(practice) || ["victory", "shop", "won", "lost"].includes(state.phase);
@@ -1091,7 +1084,7 @@
     $("enemy-hp").innerHTML = `${enemy.hp} <small>/ ${enemy.maxHp}${enemy.shield ? ` · ⬡ ${enemy.shield}` : ""}</small>`;
     $("hero-health-fill").style.width = `${actor().hp / actor().maxHp * 100}%`;
     $("enemy-health-fill").style.width = `${enemy.hp / enemy.maxHp * 100}%`;
-    $("hero-power").textContent = `+${state.power + (actor().key === "mage" ? 2 : 0)} attack power`;
+    $("hero-power").textContent = `+${state.power} attack power`;
     $("hero-healing").textContent = `+${state.healing} healing`;
     $("hero-caption")?.setAttribute("title", `Attack +${state.power} per die. Guard +${state.ward} per die. Mend +${state.healing} per die. Critical bonus +${state.critBonus}.`);
     $("encounter-number").textContent = String(state.encounter + 1).padStart(2, "0");
@@ -1133,7 +1126,7 @@
     $("dice-caption").textContent = phase === "rolled" ? "SELECT A DIE TO REROLL, OR MAKE YOUR MOVE" : phase === "rolling" ? "FATE IS DECIDING…" : "BUILD YOUR COLLECTION AT THE NEXT SHOP";
     $("die-description").textContent = actor().selected !== null ? dieDescription(actor().dice[actor().selected]) : "Six materials, ten effects. Find rare dice and sell old ones at the shop.";
     $("phase-title").textContent = phase === "ready" ? "Make your own luck." : phase === "rolled" ? "Your collection. Your destiny." : phase === "rolling" ? "Let fortune fall." : phase === "resolving" ? "Your fate unfolds." : phase === "lost" ? "The dice will roll again." : "Fortune favors the brave.";
-    $("phase-instruction").textContent = phase === "rolled" ? `${memberTypes[actor().key].name}'s effects are ready. Choose an enemy, reroll, cast an ability, or fight.` : phase === "ready" ? `${memberTypes[actor().key].name}'s turn. Roll ${actor().collection.length === 1 ? "their die" : `their ${actor().collection.length} dice`}. Every living ally acts before the enemies.` : phase === "rolling" ? "A little courage. A little luck." : phase === "resolving" ? "Watch enemy attacks. Dodge for safety, or parry to counter." : "An expedition is only the beginning.";
+    $("phase-instruction").textContent = phase === "rolled" ? "Choose a target, reroll, cast an ability, or make your move." : phase === "ready" ? `Roll ${actor().collection.length === 1 ? "your die" : `your ${actor().collection.length} dice`}. Surviving enemies strike after your move.` : phase === "rolling" ? "A little courage. A little luck." : phase === "resolving" ? "Watch the enemy wind-up. Blue means dodge; gold means parry." : "An expedition is only the beginning.";
     const outgoing = Math.max(0, values.attack - enemy.shield) + values.pierce;
     const healTarget = healingTarget();
     $("combat-preview").textContent = phase === "rolled" ? `${outgoing} damage${values.poison ? ` +${values.poison} poison` : ""} · ${Math.min(values.mend, healTarget.maxHp - healTarget.hp)} healing to ${memberTypes[healTarget.key].name} · ${outgoing >= enemy.hp ? "lethal strike!" : `target: ${enemy.name}`}` : `${memberTypes[actor().key].perk} Dodge [D] · Parry [P] during enemy strikes.`;
@@ -1359,7 +1352,6 @@
         const member = actor();
         const reaction = await defend(`${enemy.name} · ${intent.name}`, `${memberTypes[member.key].name} faces ${weakened} damage. Shield: ${member.shield}.`, false);
         if (state.id !== run || reaction.cancelled) return;
-        animate("enemy-art", "enemy-strike");
         const absorbed = absorbDamage(member.shield, reaction.success ? 0 : weakened);
         const damage = Math.min(member.hp, absorbed.damage);
         member.shield = absorbed.shield;
@@ -1407,6 +1399,7 @@
     if (!targetEnemy().hp) state.target = state.enemies.findIndex((enemy) => enemy.hp > 0);
     state.phase = "ready";
     render();
+    restoreCombatView();
     $("main-button").focus({ preventScroll: true });
   }
 
@@ -1418,7 +1411,7 @@
     state.defeated++;
     const won = battleWon();
     if (won) state.completed = state.encounter + 1;
-    const recruits = won ? recruitCompanions() : [];
+    const recruits = [];
     state.phase = "victory";
     const omen = currentOmen();
     const gold = Math.ceil(enemy.gold * (1 + state.lootBonus)) + (omen.gold || 0);
@@ -1432,7 +1425,7 @@
     $("ward-aura").classList.remove("visible");
     saveRecord();
     playSound("victory");
-    log(`${enemy.name} falls. +${gold} gold${recovery ? `, +${recovery} party health` : ""}.${recruits.length ? ` ${recruits.map((key) => memberTypes[key].name).join(" and ")} joins your party!` : ""}`);
+    log(`${enemy.name} falls. +${gold} gold${recovery ? `, +${recovery} health` : ""}.`);
     closeHelp(false);
     renderReward(false);
     render();
@@ -1444,14 +1437,12 @@
   }
 
   function renderReward(ready) {
-    const { gold, recovery, enemyIndex, battleWon: won, recruits } = state.reward;
+    const { gold, recovery, enemyIndex, battleWon: won } = state.reward;
     $("reward-description").textContent = `${state.enemies[enemyIndex].name} defeated. ${won ? `Round ${state.encounter + 1} complete.` : `${state.enemies.filter((enemy) => enemy.hp > 0).length} enemies remain; this battle continues.`} Your spoils are already in your purse.`;
     $("reward-gold").textContent = `+${gold}`;
     $("reward-health").textContent = recovery ? `+${recovery}` : "FULL";
-    $("reward-health-note").textContent = recovery ? won ? "Recovery for every ally; downed allies return." : "Recovery for your most injured living ally." : "Your party is already at full health.";
+    $("reward-health-note").textContent = recovery ? "A little strength for the next fight." : "You're already at full health.";
     $("reward-wallet").textContent = `Your purse: ${state.gold} gold`;
-    $("reward-recruit").hidden = !recruits.length;
-    $("reward-recruit").innerHTML = recruits.map((key) => `<span class="recruit-portrait" aria-hidden="true">${namespaceArtwork(memberArtwork(key), `recruit-${key}`)}</span><div><p class="eyebrow">A NEW COMPANION</p><h3>${memberTypes[key].name}, ${memberTypes[key].role}</h3><p>${memberTypes[key].perk} Starts with their own ${dieName({ type: memberTypes[key].die, tier: "base" })} and ${abilities[memberTypes[key].ability].name}.</p></div>`).join("");
     $("reward-continue").textContent = !won ? "Return to battle ↗" : state.encounter === RUN_LENGTH - 1 ? "Claim victory ↗" : state.encounters[state.encounter + 1].kind === "shop" ? "Enter the market ↗" : "Next round ↗";
     $("reward-continue").disabled = !ready;
     $("reward-overlay").hidden = false;
@@ -1533,8 +1524,6 @@
   }
 
   function renderShop() {
-    $("shop-party").innerHTML = memberCards(true);
-    $("shop-recipient").textContent = `Shopping for ${memberTypes[actor().key].name}: dice and abilities belong to this companion. Skills improve the whole party.`;
     $("shop-purse").innerHTML = `◈ <b>${state.gold}</b><small>GOLD TO SPEND</small>`;
     const levels = Object.values(state.skills).reduce((a, b) => a + b, 0);
     $("shop-status").textContent = `♡ ${actor().hp} / ${actor().maxHp} HP · ${actor().collection.length} / ${MAX_DICE} dice · ${actor().abilities.length} ${actor().abilities.length === 1 ? "ability" : "abilities"} · ${levels} skill ${levels === 1 ? "level" : "levels"}`;
@@ -1560,7 +1549,7 @@
         const owned = offer.kind === "skill" ? state.skills[offer.key] || 0 : actor().abilities.includes(offer.key) ? 1 : 0;
         const purchased = offer.kind === "skill" && offer.bought;
         const status = purchased ? "PURCHASED" : unavailable ? "MAXED / OWNED" : state.gold < offer.price ? "NEED MORE GOLD" : `BUY · ◈ ${offer.price}`;
-        return `<button class="shop-card${purchased ? " purchased" : ""}" data-offer="${index}"${unavailable || state.gold < offer.price ? " disabled" : ""}><span class="shop-card-icon">${item.icon}</span><span class="shop-card-kind">${offer.kind === "ability" ? "THIS MEMBER · ONCE / BATTLE" : "PERMANENT PARTY SKILL"}${owned ? ` · OWNED ${owned}` : ""}</span><h3>${item.name}</h3><p>${item.text}</p><span class="shop-price">${status}${!unavailable && state.gold < offer.price ? ` · ◈ ${offer.price}` : ""}</span></button>`;
+        return `<button class="shop-card${purchased ? " purchased" : ""}" data-offer="${index}"${unavailable || state.gold < offer.price ? " disabled" : ""}><span class="shop-card-icon">${item.icon}</span><span class="shop-card-kind">${offer.kind === "ability" ? "ONCE / BATTLE" : "PERMANENT SKILL"}${owned ? ` · OWNED ${owned}` : ""}</span><h3>${item.name}</h3><p>${item.text}</p><span class="shop-price">${status}${!unavailable && state.gold < offer.price ? ` · ◈ ${offer.price}` : ""}</span></button>`;
       }).join("") : '<p class="empty-stock">You already know all the abilities on offer. Browse dice or skills.</p>';
     }
     $("refresh-shop").disabled = state.refreshed || state.gold < 5;
@@ -1728,7 +1717,7 @@
     $("end-emblem").textContent = won ? "♛" : "◇";
     $("end-eyebrow").textContent = won ? "THE DARKNESS HAS FALLEN" : "THE END OF AN EXPEDITION";
     $("end-title").textContent = won ? "You defied the darkness." : "Not all luck lasts.";
-    $("end-description").textContent = won ? `All ${RUN_LENGTH} rounds complete: six areas, six markets, ${BATTLE_COUNT} battles, and ${state.defeated} monsters defeated. Your party overcame the Starless Sovereign together.` : `${targetEnemy().name} defeated your party on round ${state.encounter + 1}. You completed ${state.completed} of ${RUN_LENGTH} rounds and defeated ${state.defeated} of ${monsterCount()} monsters. A new path awaits.`;
+    $("end-description").textContent = won ? `All ${RUN_LENGTH} rounds complete: six areas, six markets, ${BATTLE_COUNT} battles, and ${state.defeated} monsters defeated. You overcame the Starless Sovereign alone.` : `${targetEnemy().name} defeated you on round ${state.encounter + 1}. You completed ${state.completed} of ${RUN_LENGTH} rounds and defeated ${state.defeated} of ${monsterCount()} monsters. A new path awaits.`;
     $("run-stats").innerHTML = [
       [state.defeated, "MONSTERS SLAIN"], [state.stats.parries, "PERFECT PARRIES"], [state.stats.dodges, "TIMED DODGES"]
     ].map(([value, label]) => `<div class="run-stat"><strong>${value}</strong><span>${label}</span></div>`).join("");
@@ -1746,11 +1735,10 @@
     { title: "Finish the fight.", text: "Your shield went from 4 to 2, with no health lost. The slime has 4 health left. Roll one last Attack to defeat it before it can hit again.", action: "finish", button: "Finish the slime ↗" },
     { title: "Claim your victory spoils.", text: "Enemies don't counterattack after they die. Collect 24 practice gold and recover 8 health. Shields belong to one battle, so they clear before the next encounter.", action: "collect", button: "Collect practice rewards ↗" },
     { title: "Build a stronger collection.", text: "Every fifth round is a shop, not a fight. Spend 14 of your practice gold on a Guard die. In real runs you start with one Attack die and buy the others.", action: "buy", button: "Buy the Guard die above" },
-    { title: "Dodge an incoming strike.", text: "A new practice slime is attacking. Start the strike when ready, then press D or Dodge when the marker reaches the BLUE window. A successful dodge takes no damage and spends no shield. Mistakes are safe here: try again.", action: "dodge", button: "Practice a timed dodge ↗" },
-    { title: "Risk a perfect parry.", text: "Parries have a smaller GOLD timing window. Start the strike, then press P or Parry inside that window. A perfect parry prevents damage and counters through shields. Try Relaxed timing if you want more time.", action: "parry", button: "Practice a timed parry ↗" },
-    { title: "Take a companion's turn.", text: "Every living companion acts once before the enemies. Rescue Mira after round 4 and Sol after round 9. Click Mira to try her own Blood die: her healing looks after your most injured living ally.", action: "party", button: "Choose Mira above" },
+    { title: "Dodge the actual attack.", text: "Watch the slime wind up in the practice arena. When its cue turns BLUE and says DODGE, press D or tap Dodge. You step aside without spending shield. No popup or Ready button. Mistakes are safe: try again.", action: "dodge", button: "Try an incoming strike ↗" },
+    { title: "Meet the strike with your blade.", text: "Wait for the GOLD flash and PARRY cue just before the slime lunges. Press P or tap Parry to block and counter through armor. Its window is tighter than dodge. Enable Relaxed timing below for a slower wind-up.", action: "parry", button: "Try a parry ↗" },
     { title: "Choose the right enemy.", text: "Later fights have up to three enemies. Their health, shields, and poison are separate. Click the weakened Practice Slime to target it instead of the armored wolf. A kill pays rewards, but other enemies stay in the battle.", action: "target", button: "Choose the weakened slime" },
-    { title: "You're ready to defy the darkness.", text: "Control your party's separate turns, pick a target, and roll each member's own dice. Dodge for safety or parry for a counter. Your real party, dice, gold, health, progress, and record are exactly as you left them.", action: "done", button: "Return to my run ↗" }
+    { title: "You're ready to defy the darkness.", text: "One hero. Your own dice. Pick your targets, watch enemy wind-ups, dodge on blue, or parry on gold. Your real dice, gold, health, progress, and record are exactly as you left them.", action: "done", button: "Return to my run ↗" }
   ];
 
   function practiceArtwork(markup) {
@@ -1801,20 +1789,20 @@
     $("practice-intent").textContent = practice.enemyHp ? "SLIME INTENT · 2 DAMAGE" : "SLIME DEFEATED · NO COUNTERATTACK";
     $("practice-arena").hidden = practice.step === 8 || practice.step >= 11;
     $("practice-arena").classList.toggle("practice-motion", practice.busy && ["fight", "finish"].includes(practice.action));
-    $("practice-dice").hidden = practice.step >= 8 && practice.step !== 12;
+    $("practice-dice").hidden = practice.step >= 8 && practice.step !== 11;
     const dice = practice.dice.length ? practice.dice : ["attack", "guard", "mend"].map((type) => ({ type, tier: "base", value: 6 }));
     const rolling = practice.busy && ["roll", "reroll", "next", "finish"].includes(practice.action);
     $("practice-dice").innerHTML = dice.map((die, i) => `<button class="die type-${die.type} tier-base${rolling ? " rolling" : ""}${!practice.dice.length ? " unrolled" : ""}${practice.step === 1 && i === 0 ? " tutorial-target" : ""}${practice.step === 2 && i === 0 ? " selected" : ""}" data-practice-die="${i}" aria-label="${diceTypes[die.type].name}${practice.dice.length ? `: rolled ${die.value}` : ": not rolled"}"${practice.step !== 1 || i !== 0 || practice.busy ? " disabled" : ""}>${dieMarkup(die.value)}<span class="die-assignment" aria-hidden="true">${diceTypes[die.type].icon}</span><span class="die-type-label" aria-hidden="true">${diceTypes[die.type].label}</span></button>`).join("");
     $("practice-shop").hidden = practice.step !== 8;
-    $("practice-party").hidden = practice.step !== 11;
-    $("practice-targets").hidden = practice.step !== 12;
+    $("practice-targets").hidden = practice.step !== 11;
     $("practice-purse").textContent = `◈ ${practice.gold} practice gold · ${practice.owned} / ${MAX_DICE} dice`;
     $("practice-buy").disabled = practice.step !== 8 || practice.busy;
     $("practice-buy").classList.toggle("tutorial-target", practice.step === 8);
     $("practice-buy-label").textContent = practice.step === 9 ? "PURCHASED · 14 GOLD" : "BUY GUARD · 14 GOLD";
     $("tutorial-action").textContent = practice.busy ? "Practicing…" : step.button;
-    $("tutorial-action").disabled = practice.busy || ["select", "buy", "party", "target"].includes(step.action);
-    const target = practice.busy ? $("tutorial-overlay").querySelector(".modal") : practice.step === 1 ? $("practice-dice").querySelector("button") : practice.step === 8 ? $("practice-buy") : practice.step === 11 ? $("practice-party").querySelector("button:enabled") : practice.step === 12 ? $("practice-targets").querySelector("button:enabled") : $("tutorial-action");
+    $("tutorial-action").disabled = practice.busy || ["select", "buy", "target"].includes(step.action);
+    renderDefenseSettings();
+    const target = practice.busy ? $("tutorial-overlay").querySelector(".modal") : practice.step === 1 ? $("practice-dice").querySelector("button") : practice.step === 8 ? $("practice-buy") : practice.step === 11 ? $("practice-targets").querySelector("button:enabled") : $("tutorial-action");
     target.focus({ preventScroll: true });
     saveProgress();
   }
@@ -1877,7 +1865,6 @@
     } else if (action === "collect") { session.gold += 24; session.hp = Math.min(40, session.hp + 8); session.shield = 0; }
     else if (action === "buy") { session.gold -= 14; session.owned++; session.enemyHp = 20; session.enemyShield = 0; }
     else if (action === "parry") session.enemyHp -= 4;
-    else if (action === "party") session.dice = [{ type: "blood", tier: "base", value: 6 }];
     else if (action === "target") session.enemyHp = 4;
     session.busy = false;
     session.action = null;
@@ -1924,25 +1911,17 @@
     if (state.phase === "ready") void rollDice();
     else if (state.phase === "rolled") void resolveTurn();
   });
-  $("party-roster").addEventListener("click", (event) => {
-    const button = event.target.closest("[data-member]");
-    if (button) selectMember(Number(button.dataset.member));
-  });
-  $("shop-party").addEventListener("click", (event) => {
-    const button = event.target.closest("[data-member]");
-    if (button) selectMember(Number(button.dataset.member));
-  });
   $("enemy-roster").addEventListener("click", (event) => {
     const button = event.target.closest("[data-enemy]");
     if (button) selectEnemy(Number(button.dataset.enemy));
   });
-  $("defense-ready").addEventListener("click", armDefense);
   ["dodge", "parry"].forEach((action) => {
     $(`defense-${action}`).addEventListener("pointerdown", (event) => { if (event.button === 0) { event.preventDefault(); reactDefense(action); } });
     $(`defense-${action}`).addEventListener("click", (event) => { if (event.detail === 0) reactDefense(action); });
   });
-  $("defense-skip").addEventListener("click", () => finishDefense({ action: null, success: false, timing: "skip" }));
-  $("defense-relaxed").addEventListener("change", () => { relaxedTiming = $("defense-relaxed").checked; saveProgress(); });
+  ["defense-relaxed", "practice-relaxed"].forEach((id) => {
+    $(id).addEventListener("change", () => { relaxedTiming = $(id).checked; renderDefenseSettings(); saveProgress(); });
+  });
   $("reroll-button").addEventListener("click", () => { void rollDice(true); });
   $("dice-tray").addEventListener("click", (event) => {
     const die = event.target.closest(".die");
@@ -2024,9 +2003,6 @@
     const die = event.target.closest("[data-practice-die]");
     if (die) selectPracticeDie(Number(die.dataset.practiceDie));
   });
-  $("practice-party").addEventListener("click", (event) => {
-    if (event.target.closest("[data-practice-member]")) void practiceAction("party");
-  });
   $("practice-targets").addEventListener("click", (event) => {
     if (event.target.closest("[data-practice-target]")) void practiceAction("target");
   });
@@ -2036,13 +2012,12 @@
     if (event.target === $("help-overlay")) closeHelp();
   });
   document.addEventListener("keydown", (event) => {
-    const overlay = ["defense-overlay", "reset-overlay", "sell-overlay", "reward-overlay", "tutorial-overlay", "help-overlay", "shop-overlay", "end-overlay"].map($).find((element) => !element.hidden);
+    if (defense && !event.repeat && !event.ctrlKey && !event.metaKey && !event.altKey) {
+      const key = event.key.toLowerCase();
+      if (key === "d" || key === "p") { event.preventDefault(); reactDefense(key === "d" ? "dodge" : "parry"); return; }
+    }
+    const overlay = ["reset-overlay", "sell-overlay", "reward-overlay", "tutorial-overlay", "help-overlay", "shop-overlay", "end-overlay"].map($).find((element) => !element.hidden);
     if (overlay) {
-      if (overlay.id === "defense-overlay" && !event.repeat && !event.ctrlKey && !event.metaKey && !event.altKey) {
-        const key = event.key.toLowerCase();
-        if (key === "d" || key === "p") { event.preventDefault(); reactDefense(key === "d" ? "dodge" : "parry"); return; }
-        if (key === "escape") { event.preventDefault(); finishDefense({ action: null, success: false, timing: "skip" }); return; }
-      }
       if (overlay.id === "tutorial-overlay") {
         if (event.key === "Escape") { event.preventDefault(); closeTutorial(); return; }
         if (!event.repeat && !event.ctrlKey && !event.metaKey && !event.altKey && event.key === "1") { event.preventDefault(); selectPracticeDie(0); return; }
