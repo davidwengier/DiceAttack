@@ -78,7 +78,15 @@
     const item = skills[key];
     return !unlocked(item, stage) ? 0 : key === "luck" ? Math.ceil(stage / 2) : Math.min(item.max, item.perStage ? stage * item.perStage : item.max);
   }
-  const poisonLimit = (profile = state) => 12 + (profile.skills.venomcraft || 0) * 2;
+  const relics = Object.fromEntries([3, 4, 5].flatMap((unlock) => Object.keys(diceTypes).map((type) => {
+    const multiplier = 2 ** (unlock - 2);
+    return [`${type}-${unlock}`, { type, unlock, multiplier, name: `${["", "", "", "Awakened", "Ascendant", "Eternal"][unlock]} ${diceTypes[type].name.replace(" Die", "")} Relic`,
+      icon: diceTypes[type].icon, price: diceTypes[type].price * ({ 3: 5, 4: 12, 5: 28 })[unlock],
+      text: `Multiply every ${diceTypes[type].name} effective roll by ${multiplier}. All copies benefit. Stacks by multiplication with your other ${diceTypes[type].name} relics.${type === "venom" ? " Also multiplies the poison cap." : ""} Buy this relic once per adventure.` }];
+  })));
+  const relicMultiplier = (type, profile = state) => (profile.relics || []).reduce((total, key) => total * (relics[key].type === type ? relics[key].multiplier : 1), 1);
+  const effectiveRoll = (die) => (die.value + diceTiers[die.tier].bonus) * relicMultiplier(die.type);
+  const poisonLimit = (profile = state) => (12 + (profile.skills.venomcraft || 0) * 2) * relicMultiplier("venom", profile);
   const pipPositions = {
     1: [5], 2: [1, 9], 3: [1, 5, 9], 4: [1, 3, 7, 9],
     5: [1, 3, 5, 7, 9], 6: [1, 3, 4, 6, 7, 9]
@@ -233,7 +241,7 @@
       const gold = Math.round((19 + index * 2 + (monster.boss ? 12 : 0) + (elite ? 6 : 0)) * (1 + (stage - 1) * .25));
       return {
         ...monster, stage, kind: "battle", name: `${elite ? "Frenzied " : ""}${monster.name}`, elite,
-        hp: Math.round(hp * (1 + (stage - 1) * .25) * (.94 + Math.random() * .12) * (elite ? 1.1 : 1)),
+        hp: Math.round((hp + (stage - 1) * 350) * (1 + (stage - 1) * .25) * (.94 + Math.random() * .12) * (elite ? 1.1 : 1)),
         gold: gold + Math.floor(Math.random() * 4),
         role: monster.flying ? "FLYING · BOW REQUIRED" : monster.final ? stage === STAGE_COUNT ? "FINAL GUARDIAN" : "STAGE GUARDIAN" : monster.boss ? "WORLD GUARDIAN" : elite ? "FRENZIED CREATURE" : "CREATURE OF THE " + zones[monster.zone].className.toUpperCase(),
         flavor: monster.flying ? "Beyond the reach of a blade. Your bow can reach it." : monster.final ? "Beyond the last market, the ruler of this stage awaits." : monster.boss ? "The guardian stands between you and a safe haven." : `A new danger awaits in ${stages[stage - 1].worlds[monster.zone]}.`,
@@ -294,6 +302,10 @@
   let restoring = false;
   let savingPaused = false;
   let scrollSaveTimer;
+  let screen = "menu";
+  let collectionTab = "dice";
+  let gameScroll = 0;
+  let collectionScroll = 0;
   const wait = (ms) => new Promise((resolve) => setTimeout(resolve, reducedMotion ? Math.min(ms, 25) : ms));
   const rollDie = () => Math.max(1 + (state.skills.floor || 0), Math.floor(Math.random() * 6) + 1);
 
@@ -330,18 +342,21 @@
     if (!savingPaused) notify("Your saved run could not be read or written. Progress is not being saved. Reset the run to retry; unreadable saves won't be overwritten automatically.", "error");
     savingPaused = true;
     $("save-status").textContent = "AUTOSAVE UNAVAILABLE";
+    $("menu-save-note").textContent = "AUTOSAVE UNAVAILABLE · Progress is not being saved. Your unreadable save is kept until you choose to reset.";
+    $("collection-save-status").textContent = "AUTOSAVE UNAVAILABLE · Progress is not being saved.";
   }
 
   function saveProgress(force = false) {
     if (!state || restoring || savingPaused || (!force && document.hidden) || !stablePhases.includes(state.phase) || practice?.busy) return;
     const snapshot = {
-      version: 5,
+      version: 6,
       state: { ...state, id: undefined, party: state.party.map((member) => ({ ...member, usedAbilities: [...member.usedAbilities] })), expandedOffers: [...state.expandedOffers] },
       tutorialSeen, tutorialStep: practice ? practice.step : null,
       journal: [...$("battle-log").children].map((entry) => entry.lastChild.textContent),
       view: {
         help: ["ready", "rolled"].includes(state.phase) && !$("help-overlay").hidden, reset: !$("reset-overlay").hidden,
-        page: window.scrollY, shop: $("shop-overlay").querySelector(".modal").scrollTop,
+        screen, collectionTab, collection: screen === "collection" ? window.scrollY : collectionScroll,
+        page: screen === "game" ? window.scrollY : gameScroll, shop: $("shop-overlay").querySelector(".modal").scrollTop,
         tutorial: $("tutorial-overlay").querySelector(".modal").scrollTop,
         instructions: $("help-overlay").querySelector(".modal").scrollTop
       }
@@ -352,6 +367,8 @@
       if (text !== lastSavedText) localStorage.setItem(SAVE_KEY, text);
       lastSavedText = text;
       $("save-status").textContent = "PROGRESS SAVED ON THIS BROWSER";
+      $("menu-save-note").textContent = "Your adventure saves automatically in this browser.";
+      $("collection-save-status").textContent = "PROGRESS SAVED ON THIS BROWSER";
     } catch (error) { pauseSaving(error); }
   }
 
@@ -485,6 +502,20 @@
     return { ...saved, version: 5, state: { ...saved.state, encounters: saved.state.encounters.map((round, i) => i > saved.state.encounter ? route[i] : round) },
       journal: ["New stage enemies await beyond this round. Markets unlock more upgrades, abilities, and materials in every stage.", ...saved.journal].slice(0, 3) };
   }
+  function upgradeRelics(saved) {
+    validateSave(saved);
+    const route = generateRun();
+    const encounters = saved.state.encounters.map((round, i) => {
+      if (i <= saved.state.encounter || round.kind === "shop" || stageFor(i) === 1) return round;
+      const generated = route[i];
+      const health = generated.hp;
+      const group = round.group.map((enemy, index) => ({ ...enemy, hp: index === 0 ? health : Math.max(5, Math.round(health * (round.boss ? .25 : .4))) }));
+      return { ...round, hp: health, group };
+    });
+    return { ...saved, version: 6, state: { ...saved.state, relics: [], encounters },
+      view: { ...saved.view, screen: saved.tutorialStep === null ? "menu" : "game", collectionTab: "dice", collection: 0 },
+      journal: ["Enemy health now grows between stages. Stages 3–5 sell stacking relics. Your current battle and purchases are kept.", ...saved.journal].slice(0, 3) };
+  }
 
   function validateSave(saved) {
     const require = (valid, field) => { if (!valid) throw new Error(`Invalid saved ${field}.`); };
@@ -492,11 +523,12 @@
     const object = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
     const keys = (list, catalog) => Array.isArray(list) && new Set(list).size === list.length && list.every((key) => typeof key === "string" && Object.hasOwn(catalog, key));
     const die = (value) => object(value) && typeof value.type === "string" && typeof value.tier === "string" && Object.hasOwn(diceTypes, value.type) && Object.hasOwn(diceTiers, value.tier) && integer(value.id, 1) && integer(value.paidPrice);
-    require(object(saved) && [2, 3, 4, 5].includes(saved.version) && object(saved.state) && (saved.version >= 4 || typeof saved.relaxedTiming === "boolean"), "format");
+    require(object(saved) && [2, 3, 4, 5, 6].includes(saved.version) && object(saved.state) && (saved.version >= 4 || typeof saved.relaxedTiming === "boolean"), "format");
     const legacy = saved.version < 4;
     const length = legacy ? STAGE_LENGTH : RUN_LENGTH;
     const catalog = saved.version === 2 ? legacyMemberTypes : memberTypes;
     const s = saved.state;
+    require(saved.version < 6 || (keys(s.relics, relics) && s.relics.every((key) => unlocked(relics[key], stageFor(s.encounter)))), "relics");
     require(stablePhases.includes(s.phase) && typeof s.code === "string" && /^[A-Z0-9]{4}$/.test(s.code), "phase or run code");
     require(Array.isArray(s.encounters) && s.encounters.length === length, "route");
     s.encounters.forEach((round, i) => {
@@ -520,7 +552,7 @@
     require((s.phase === "shop") === (s.encounters[s.encounter].kind === "shop") && (s.phase !== "won" || s.encounter === length - 1), "round phase");
     require(object(s.skills) && Object.entries(s.skills).every(([key, level]) => Object.hasOwn(skills, key) && integer(level, 1, skills[key].max)), "skills");
     require(s.power === (s.skills.power || 0) && s.ward === (s.skills.ward || 0) && s.healing === (s.skills.healing || 0) && s.critBonus === 3 + (s.skills.critical || 0) * 2 && s.recovery === (s.skills.recovery || 0) * 4 && s.lootBonus === (s.skills.loot || 0) * .25 && s.extraRerolls === (s.skills.luck || 0), "skill bonuses");
-    require(saved.version !== 5 || Object.entries(s.skills).every(([key, level]) => level <= skillLimit(key, stageFor(s.encounter))), "upgrade unlocks");
+    require(saved.version < 5 || Object.entries(s.skills).every(([key, level]) => level <= skillLimit(key, stageFor(s.encounter))), "upgrade unlocks");
     const expectedParty = Object.keys(catalog).filter((key) => catalog[key].joins <= s.completed);
     require(Array.isArray(s.party) && s.party.length === expectedParty.length && s.party.every((member, i) => object(member) && member.key === expectedParty[i]), "party");
     const ids = [];
@@ -557,11 +589,12 @@
     require(s.defeated === kills, "monster count");
     require(object(s.stats) && (legacy ? ["rolls", "damage", "criticals", "earned", "dodges", "parries"] : ["rolls", "damage", "criticals", "earned"]).every((key) => integer(s.stats[key])), "statistics");
     require(Array.isArray(s.stock) && s.stock.length <= 10 && s.stock.every((offer) => object(offer) && ["dice", "skill", "ability"].includes(offer.kind) && typeof offer.key === "string" && Object.hasOwn(offer.kind === "dice" ? diceTypes : offer.kind === "skill" ? skills : abilities, offer.key) && integer(offer.price, 1) && typeof offer.bought === "boolean"), "market stock");
-    require(["all", "dice", "skill", "ability", "owned"].includes(s.shopFilter) && typeof s.refreshed === "boolean" && Array.isArray(s.expandedOffers) && s.expandedOffers.every((index) => integer(index, 0, s.stock.length - 1)), "market state");
+    require(["all", "dice", "skill", "ability", "owned", "relic"].includes(s.shopFilter) && typeof s.refreshed === "boolean" && Array.isArray(s.expandedOffers) && s.expandedOffers.every((index) => integer(index, 0, s.stock.length - 1)), "market state");
     require(s.pendingSale === null || (s.phase === "shop" && member.collection.some((owned) => owned.id === s.pendingSale)), "pending sale");
     require(typeof saved.tutorialSeen === "boolean" && (saved.tutorialStep === null || (saved.tutorialSeen && ["ready", "rolled"].includes(s.phase) && integer(saved.tutorialStep, 0, saved.version === 2 ? 13 : saved.version === 3 ? 12 : tutorialSteps.length - 1))), "tutorial");
     require(Array.isArray(saved.journal) && saved.journal.length <= 3 && saved.journal.every((message) => typeof message === "string" && message.length <= 1000), "journal");
     require(object(saved.view) && typeof saved.view.help === "boolean" && typeof saved.view.reset === "boolean" && ["page", "shop", "tutorial", "instructions"].every((key) => Number.isFinite(saved.view[key]) && saved.view[key] >= 0 && saved.view[key] <= 1000000), "view");
+    require(saved.version < 6 || (["menu", "game", "collection"].includes(saved.view.screen) && ["dice", "materials", "abilities", "upgrades", "relics", "enemies"].includes(saved.view.collectionTab) && Number.isFinite(saved.view.collection) && saved.view.collection >= 0 && saved.view.collection <= 1000000 && (saved.tutorialStep === null || saved.view.screen === "game")), "navigation");
     require((!saved.view.help || ["ready", "rolled"].includes(s.phase)) && (!saved.view.reset || (["ready", "rolled", "shop", "won", "lost"].includes(s.phase) && s.pendingSale === null)) && (!saved.view.help || !saved.view.reset) && (saved.tutorialStep === null || (!saved.view.help && !saved.view.reset)), "open dialog");
   }
 
@@ -574,9 +607,14 @@
       else if (saved.version === 2) saved = upgradePartySave(saved);
       if (saved.version === 3) saved = upgradeStages(saved);
       if (saved.version === 4) saved = upgradeWorlds(saved);
+      if (saved.version === 5) saved = upgradeRelics(saved);
       validateSave(saved);
     } catch (error) { pauseSaving(error); return false; }
     restoring = true;
+    screen = saved.view.screen;
+    collectionTab = saved.view.collectionTab;
+    gameScroll = saved.view.page;
+    collectionScroll = saved.view.collection;
     state = { ...saved.state, id: ++runSerial, party: saved.state.party.map((member) => ({ ...member, usedAbilities: new Set(member.usedAbilities) })), expandedOffers: new Set(saved.state.expandedOffers) };
     const source = state.encounters[state.phase === "shop" ? state.encounter - 1 : state.encounter].group;
     state.enemies = source.map((definition, i) => ({ ...definition, maxHp: definition.hp, ...Object.fromEntries(["hp", "shield", "poison", "frozen", "chill", "rewarded"].map((key) => [key, saved.state.enemies[i][key]])) }));
@@ -611,7 +649,10 @@
     else $("main-button").focus({ preventScroll: true });
     if (saved.view.reset) openReset();
     else if (saved.view.help) openHelp();
-    window.scrollTo(0, saved.view.page);
+    renderNavigation();
+    if (screen === "collection") renderCollection();
+    window.scrollTo(0, screen === "collection" ? collectionScroll : screen === "game" ? gameScroll : 0);
+    if (screen !== "game" && !saved.view.reset) $(screen === "menu" ? "menu-play" : "collection-back").focus({ preventScroll: true });
     $("shop-overlay").querySelector(".modal").scrollTop = saved.view.shop;
     $("tutorial-overlay").querySelector(".modal").scrollTop = saved.view.tutorial;
     $("help-overlay").querySelector(".modal").scrollTop = saved.view.instructions;
@@ -1065,7 +1106,7 @@
       encounters: generateRun(), omens: shuffle(omens),
       phase: "ready", encounter: 0, completed: 0, defeated: 0, reward: null, turn: 1, gold: 0, weapon: "melee", battleLoot: { gold: 0, recovery: 0 },
       power: 0, ward: 0, healing: 0, critBonus: 3, recovery: 0, extraRerolls: 0, lootBonus: 0,
-      party: [], actorIndex: 0, acted: [], nextDieId: 1, pendingSale: null, enemies: [], target: 0, enemyCursor: 0, skills: {},
+      party: [], actorIndex: 0, acted: [], nextDieId: 1, pendingSale: null, enemies: [], target: 0, enemyCursor: 0, skills: {}, relics: [],
       stats: { rolls: 0, damage: 0, criticals: 0, earned: 0 }, stock: [], shopFilter: "all", refreshed: false, expandedOffers: new Set()
     };
     state.party.push(createMember("knight"));
@@ -1190,7 +1231,7 @@
     const ward = state.ward + (omen.ward || 0);
     const healing = state.healing + (omen.healing || 0);
     actor().dice.forEach((die) => {
-      const value = die.value + diceTiers[die.tier].bonus;
+      const value = effectiveRoll(die);
       if (die.type === "attack") {
         result.attack += value + power + (die.value === 6 ? state.critBonus + (omen.critical || 0) : 0);
         if (die.value === 6) result.criticals++;
@@ -1298,6 +1339,7 @@
     $("combat-preview").textContent = phase === "rolled" ? !canHitTarget() ? "Switch to Bow to reach this flying enemy. Your rolled dice stay unchanged." : `${outgoing} ${state.weapon === "bow" ? "bow " : ""}damage${values.poison ? ` +${values.poison} poison` : ""} · ${Math.min(values.mend, healTarget.maxHp - healTarget.hp)} healing · ${outgoing >= enemy.hp ? "lethal strike!" : `target: ${enemy.name}`}` : `${memberTypes[actor().key].perk} ${stage >= 2 ? "Bow reaches flying enemies. Your dice power both weapons." : "Shields block automatically. Win the whole round to claim its chest."}`;
     renderAbilities();
     $("skill-list").innerHTML = Object.entries(state.skills).map(([key, level]) => `<span title="${skills[key].text}">${skills[key].icon} ${skills[key].name} ${level > 1 ? `×${level}` : ""}</span>`).join("");
+    renderNavigation();
     saveProgress();
   }
 
@@ -1311,7 +1353,8 @@
 
   function dieDescription(die) {
     const tier = diceTiers[die.tier];
-    return `${dieName(die)}: ${diceTypes[die.type].text}${tier.bonus ? ` ${tier.name} adds +${tier.bonus} to the roll before calculating its effects.` : ""}${die.value !== undefined ? ` Rolled ${die.value}${tier.bonus ? ` + ${tier.bonus} = ${die.value + tier.bonus}` : ""}.` : ""}`;
+    const multiplier = relicMultiplier(die.type);
+    return `${dieName(die)}: ${diceTypes[die.type].text}${tier.bonus ? ` ${tier.name} adds +${tier.bonus} to the roll.` : ""}${multiplier > 1 ? ` Relics multiply its effective roll by ${multiplier}.` : ""}${die.value !== undefined ? ` Rolled ${die.value}${tier.bonus || multiplier > 1 ? `; (${die.value} + ${tier.bonus}) × ${multiplier} = ${effectiveRoll(die)}` : ""}.` : ""}`;
   }
 
   function renderDice() {
@@ -1600,6 +1643,7 @@
     await wait(1000);
     if (state.id !== run) return;
     $("reward-continue").disabled = false;
+    $("reward-menu").disabled = false;
     $("reward-continue").focus({ preventScroll: true });
   }
 
@@ -1614,6 +1658,7 @@
     $("reward-wallet").textContent = `Your purse: ${state.gold} gold`;
     $("reward-continue").textContent = state.encounter === RUN_LENGTH - 1 ? "Claim victory ↗" : stageEnd ? `Enter stage ${stage + 1} ↗` : state.encounters[state.encounter + 1].kind === "shop" ? "Enter the market ↗" : "Next round ↗";
     $("reward-continue").disabled = !ready;
+    $("reward-menu").disabled = !ready;
     $("reward-overlay").hidden = false;
   }
 
@@ -1662,6 +1707,27 @@
   function itemDefinition(offer) {
     return (offer.kind === "dice" ? diceTypes : offer.kind === "ability" ? abilities : skills)[offer.key];
   }
+  function relicCard(key) {
+    const item = relics[key];
+    const owned = state.relics.includes(key);
+    return `<button class="shop-card relic-card${owned ? " purchased" : ""}" data-relic="${key}"${owned || state.gold < item.price ? " disabled" : ""}><span class="shop-card-icon">${item.icon}</span><span class="shop-card-kind">RELIC · STAGE ${item.unlock}+ · BUY ONCE</span><h3>${item.name}</h3><strong class="relic-factor">×${item.multiplier}</strong><p>${item.text}</p><span class="shop-price">${owned ? "PURCHASED" : `BUY · ◈ ${item.price}`}</span></button>`;
+  }
+
+  function buyRelic(key) {
+    if (state.phase !== "shop" || !Object.hasOwn(relics, key)) return;
+    const item = relics[key];
+    if (!unlocked(item) || state.relics.includes(key) || state.gold < item.price) {
+      notify("That relic is unavailable. Check its stage, your gold, and whether you already own it.");
+      return;
+    }
+    state.gold -= item.price;
+    state.relics.push(key);
+    log(`${item.name} purchased. ${diceTypes[item.type].name} rolls now have a ×${relicMultiplier(item.type)} combined relic multiplier.`);
+    playSound("heal");
+    render();
+    renderShop();
+    $("leave-shop").focus({ preventScroll: true });
+  }
 
   function offerUnavailable(offer) {
     return !unlocked(itemDefinition(offer)) || (offer.kind === "skill" && offer.bought) || (offer.kind === "dice" && actor().collection.length >= MAX_DICE) ||
@@ -1692,15 +1758,22 @@
     $("shop-eyebrow").textContent = `STAGE ${stageFor(state.encounter)} / ${STAGE_COUNT} · ROUND ${localRound(state.encounter) + 1} / ${STAGE_LENGTH} · SHOP ONLY`;
     const stage = stageFor(state.encounter);
     $("shop-description").textContent = `A safe haven in ${worldName()}. Core upgrades now reach level ${stage * 3}. ${stage >= 2 ? `${["", "", "Sapphire", "Sunstone", "Mythril", "Celestial"][stage]} dice and new stage abilities are available. ` : "More upgrades, abilities, and materials unlock in later stages. "}Sell old dice to make room; your purchases carry forward.`;
+    if (stage >= 3) $("shop-description").textContent += " Relics multiply dice rolls: ×2, ×4, and ×8 stack to ×64 when all three are owned.";
   }
 
   function renderShop() {
     $("shop-purse").innerHTML = `◈ <b>${state.gold}</b><small>GOLD TO SPEND</small>`;
     const levels = Object.values(state.skills).reduce((a, b) => a + b, 0);
     $("shop-status").textContent = `♡ ${actor().hp} / ${actor().maxHp} HP · ${actor().collection.length} / ${MAX_DICE} dice · ${actor().abilities.length} ${actor().abilities.length === 1 ? "ability" : "abilities"} · ${levels} skill ${levels === 1 ? "level" : "levels"}`;
-    $("shop-tabs").querySelectorAll("button").forEach((button) => button.setAttribute("aria-pressed", String(button.dataset.filter === state.shopFilter)));
+    $("shop-tabs").querySelectorAll("button").forEach((button) => {
+      button.setAttribute("aria-pressed", String(button.dataset.filter === state.shopFilter));
+      if (button.dataset.filter === "relic") button.disabled = stageFor(state.encounter) < 3;
+    });
     if (state.shopFilter === "owned") {
       renderOwnedDice();
+    } else if (state.shopFilter === "relic") {
+      const available = Object.keys(relics).filter((key) => unlocked(relics[key]));
+      $("shop-stock").innerHTML = available.length ? available.map(relicCard).join("") : '<p class="empty-stock">Relics unlock in stage 3. Preview every relic in the Collection.</p>';
     } else {
       const visible = state.stock.map((offer, index) => ({ offer, index })).filter(({ offer }) => state.shopFilter === "all" || offer.kind === state.shopFilter);
       $("shop-stock").innerHTML = visible.length ? visible.map(({ offer, index }) => {
@@ -1722,12 +1795,96 @@
         const status = purchased ? "PURCHASED" : unavailable ? "MAXED / OWNED" : state.gold < offer.price ? "NEED MORE GOLD" : `BUY · ◈ ${offer.price}`;
         return `<button class="shop-card${purchased ? " purchased" : ""}" data-offer="${index}"${unavailable || state.gold < offer.price ? " disabled" : ""}><span class="shop-card-icon">${item.icon}</span><span class="shop-card-kind">${offer.kind === "ability" ? "ONCE / BATTLE" : `PERMANENT UPGRADE · LEVEL ${owned} / ${skillLimit(offer.key)}`}${item.unlock ? ` · STAGE ${item.unlock}+` : ""}</span><h3>${item.name}</h3><p>${item.text}</p><span class="shop-price">${status}${!unavailable && state.gold < offer.price ? ` · ◈ ${offer.price}` : ""}</span></button>`;
       }).join("") : '<p class="empty-stock">No unowned wares in this category today. Refresh stock or browse another tab. New abilities and higher upgrade limits unlock in the next stage.</p>';
+      if (state.shopFilter === "all") $("shop-stock").insertAdjacentHTML("afterbegin", Object.keys(relics).filter((key) => unlocked(relics[key]) && !state.relics.includes(key)).slice(0, 2).map(relicCard).join(""));
     }
     $("refresh-shop").disabled = state.refreshed || state.gold < 5;
     $("refresh-shop").textContent = state.refreshed ? "↻ Stock refreshed" : "↻ New stock · 5 gold";
     $("shop-rest").disabled = state.gold < 8 || actor().hp === actor().maxHp;
     $("shop-rest").textContent = `✚ Restore ${12 + (state.skills.hospitality || 0) * 4} HP · 8 gold`;
     saveProgress();
+  }
+
+  function canNavigate() {
+    return stablePhases.includes(state.phase) && !practice && (state.phase !== "victory" || !$("reward-continue").disabled);
+  }
+
+  function renderNavigation() {
+    document.body.dataset.screen = screen;
+    $("menu-screen").hidden = screen !== "menu";
+    $("collection-screen").hidden = screen !== "collection";
+    const overlayOpen = [...document.querySelectorAll(".overlay")].some((element) => !element.hidden);
+    document.querySelector(".app").inert = screen !== "game" || overlayOpen || Boolean(practice) || ["won", "lost", "victory", "shop"].includes(state.phase);
+    $("menu-screen").inert = !$("reset-overlay").hidden;
+    $("collection-screen").inert = !$("reset-overlay").hidden;
+    $("game-navigation").hidden = screen !== "game" || overlayOpen;
+    $("game-navigation").querySelectorAll("button").forEach((button) => { button.disabled = !canNavigate(); });
+    if (screen === "menu") {
+      $("menu-progress").textContent = `${state.completed} / 155 rounds complete · Stage ${stageFor(state.encounter)}, round ${localRound(state.encounter) + 1} · ${state.gold} gold`;
+      $("menu-play").textContent = state.phase === "shop" ? "Return to market ↗" : ["won", "lost"].includes(state.phase) ? "View last adventure ↗" : state.completed || actor().dice.length || state.turn > 1 ? "Continue adventure ↗" : "Begin adventure ↗";
+      $("menu-new").disabled = state.phase === "victory";
+      if (!$("menu-hero").childElementCount) $("menu-hero").innerHTML = namespaceArtwork(heroArtwork(), "menu");
+      const artKey = `${stageFor(state.encounter)}-${worldFor(state.encounter)}`;
+      if ($("menu-scene").dataset.artKey !== artKey) {
+        $("menu-scene").dataset.artKey = artKey;
+        $("menu-scene").innerHTML = namespaceArtwork(sceneArtwork(worldFor(state.encounter), stageFor(state.encounter)), "menu-scene");
+      }
+    }
+  }
+
+  function showScreen(next) {
+    if (!canNavigate()) return;
+    if (screen === "game") gameScroll = window.scrollY;
+    else if (screen === "collection") collectionScroll = window.scrollY;
+    screen = next;
+    renderNavigation();
+    if (next === "collection") renderCollection();
+    window.scrollTo(0, next === "game" ? gameScroll : next === "collection" ? collectionScroll : 0);
+    if (next === "menu") $("menu-play").focus({ preventScroll: true });
+    else if (next === "collection") $("collection-back").focus({ preventScroll: true });
+    else {
+      const overlay = ["reset-overlay", "sell-overlay", "reward-overlay", "tutorial-overlay", "help-overlay", "shop-overlay", "end-overlay"].map($).find((element) => !element.hidden);
+      (overlay?.querySelector("button:enabled") || $("main-button")).focus({ preventScroll: true });
+      if (!tutorialSeen && ["ready", "rolled"].includes(state.phase)) openTutorial();
+    }
+    saveProgress();
+  }
+
+  function renderCollection() {
+    const member = actor();
+    const stage = stageFor(state.encounter);
+    const ownedDice = (key) => member.collection.filter((die) => die.type === key).length;
+    const seenEnemies = new Set(state.encounters.slice(0, state.encounter + 1).flatMap((round) => round.group || []).map((enemy) => enemy.name.replace(/^Frenzied /, "")));
+    let items;
+    if (collectionTab === "dice") items = Object.entries(diceTypes).map(([key, item], rarity) => ({
+      name: item.name, icon: item.icon, text: item.text, owned: ownedDice(key) > 0, rarity,
+      note: `${ownedDice(key)} owned · Relic multiplier ×${relicMultiplier(key)}`, unlock: 1
+    }));
+    else if (collectionTab === "materials") items = Object.entries(diceTiers).map(([key, item], rarity) => ({
+      name: `${item.name} material`, icon: item.icon, text: `Adds +${item.bonus} to every rolled face before relic multipliers and dice effects. Natural criticals and double strikes still use the original face.`,
+      owned: member.collection.some((die) => die.tier === key), rarity, note: `+${item.bonus} power · ${item.priceMultiplier}× base purchase price`, unlock: item.unlock || 1
+    }));
+    else if (collectionTab === "abilities") items = Object.entries(abilities).map(([key, item], rarity) => ({
+      ...item, owned: member.abilities.includes(key), rarity: (item.unlock || 1) * 100 + rarity, note: "Click to cast · Once per battle · Does not spend your turn"
+    }));
+    else if (collectionTab === "upgrades") items = Object.entries(skills).map(([key, item], rarity) => ({
+      ...item, owned: Boolean(state.skills[key]), rarity: (item.unlock || 1) * 100 + rarity,
+      note: `Level ${state.skills[key] || 0} / ${skillLimit(key)} available now · ${item.max} maximum${item.perStage ? " · Limit rises each stage" : ""}`
+    }));
+    else if (collectionTab === "relics") items = Object.entries(relics).map(([key, item], rarity) => ({
+      ...item, owned: state.relics.includes(key), rarity: item.unlock * 100 + rarity,
+      note: `×${item.multiplier} bonus · Combined ${diceTypes[item.type].name} multiplier ×${relicMultiplier(item.type)} · ${item.price} gold`
+    }));
+    else items = monsters.filter((enemy) => enemy.homeStage || !enemy.flying).map((enemy, rarity) => ({
+      name: enemy.name, icon: enemy.boss ? "♛" : enemy.flying ? "➶" : "⚔", owned: seenEnemies.has(enemy.name), rarity: (enemy.homeStage || 1) * 1000 + enemy.zone * 100 + rarity,
+      text: `${enemy.flying ? "Flying: only bow attacks can damage this enemy. " : "Grounded: melee and bow attacks both work. "}Moves: ${enemy.moves.map((move) => move[2]).join(", ")}.`,
+      note: `Stage ${enemy.homeStage || 1} · World ${enemy.zone + 1}${enemy.final ? " · Stage guardian" : enemy.boss ? " · World guardian" : ""}`,
+      unlock: enemy.homeStage || 1, artwork: namespaceArtwork(enemyArtwork(enemy), `collection-${rarity}`)
+    }));
+    items.sort((a, b) => Number(b.owned) - Number(a.owned) || a.rarity - b.rarity);
+    $("collection-tabs").querySelectorAll("button").forEach((button) => button.setAttribute("aria-pressed", String(button.dataset.collection === collectionTab)));
+    const owned = items.filter((item) => item.owned).length;
+    $("collection-count").textContent = `${owned} / ${items.length} ${collectionTab === "enemies" ? "encountered · Encountered" : "owned in this adventure · Owned"} first, then rarity`;
+    $("collection-grid").innerHTML = items.map((item) => `<article class="collection-card${item.owned ? " owned-entry" : ""}${(item.unlock || 1) > stage ? " locked-entry" : ""}" data-owned="${item.owned}" data-rarity="${item.rarity}">${item.artwork ? `<div class="collection-portrait">${item.artwork}</div>` : `<span class="collection-icon">${item.icon}</span>`}<span class="shop-card-kind">${item.owned ? collectionTab === "enemies" ? "ENCOUNTERED" : "OWNED" : (item.unlock || 1) > stage ? `UNLOCKS IN STAGE ${item.unlock}` : collectionTab === "enemies" ? "UNDISCOVERED" : "NOT OWNED"}</span><h2>${item.name}</h2><p>${item.text}</p><small>${item.note}</small></article>`).join("");
   }
 
   function buyOffer(index, tier = "base") {
@@ -1863,7 +2020,7 @@
     const item = abilities[key];
     const member = actor();
     const enemies = item.all ? state.enemies.filter((enemy) => enemy.hp) : [targetEnemy()];
-    const rolledPower = member.dice.filter((die) => diceTypes[die.type].offensive).reduce((sum, die) => sum + die.value + diceTiers[die.tier].bonus, 0);
+    const rolledPower = member.dice.filter((die) => diceTypes[die.type].offensive).reduce((sum, die) => sum + effectiveRoll(die), 0);
     const run = state.id;
     const previousPhase = state.phase;
     actor().usedAbilities.add(key);
@@ -2066,6 +2223,7 @@
     if (!$("shop-overlay").hidden || !$("end-overlay").hidden || !$("reset-overlay").hidden || !$("sell-overlay").hidden || !$("reward-overlay").hidden || practice) return;
     helpReturnFocus = document.activeElement;
     $("help-overlay").hidden = false;
+    renderNavigation();
     $("help-overlay").querySelector(".modal").scrollTop = 0;
     $("close-help").focus({ preventScroll: true });
     saveProgress();
@@ -2074,6 +2232,7 @@
   function closeHelp(restoreFocus = true) {
     if ($("help-overlay").hidden) return;
     $("help-overlay").hidden = true;
+    renderNavigation();
     if (restoreFocus) {
       const target = helpReturnFocus?.isConnected && !helpReturnFocus.disabled ? helpReturnFocus : $("help-button");
       target.focus({ preventScroll: true });
@@ -2087,12 +2246,14 @@
     closeSale(false);
     resetReturnFocus = document.activeElement;
     $("reset-overlay").hidden = false;
+    renderNavigation();
     $("cancel-reset").focus({ preventScroll: true });
     saveProgress();
   }
 
   function cancelReset() {
     $("reset-overlay").hidden = true;
+    renderNavigation();
     if (resetReturnFocus?.isConnected && !resetReturnFocus.disabled && resetReturnFocus.getClientRects().length) resetReturnFocus.focus({ preventScroll: true });
     else (state.phase === "shop" ? $("leave-shop") : $("reset-button")).focus({ preventScroll: true });
     saveProgress();
@@ -2120,6 +2281,8 @@
     if (button) void castAbility(button.dataset.ability);
   });
   $("shop-stock").addEventListener("click", (event) => {
+    const relic = event.target.closest("[data-relic]");
+    if (relic) { buyRelic(relic.dataset.relic); return; }
     const sell = event.target.closest("[data-sell-id]");
     if (sell) { openSale(Number(sell.dataset.sellId)); return; }
     const card = event.target.closest("[data-offer]");
@@ -2170,11 +2333,27 @@
   $("cancel-reset").addEventListener("click", cancelReset);
   $("confirm-reset").addEventListener("click", () => {
     startRun(true);
-    $("main-button").focus({ preventScroll: true });
+    showScreen("game");
   });
   $("restart-button").addEventListener("click", () => {
     startRun(true);
-    $("main-button").focus({ preventScroll: true });
+    showScreen("game");
+  });
+  $("menu-play").addEventListener("click", () => showScreen("game"));
+  $("menu-new").addEventListener("click", openReset);
+  $("menu-collection").addEventListener("click", () => showScreen("collection"));
+  $("collection-back").addEventListener("click", () => showScreen("menu"));
+  $("collection-resume").addEventListener("click", () => showScreen("game"));
+  ["nav-menu", "shop-menu", "reward-menu", "end-menu"].forEach((id) => $(id).addEventListener("click", () => showScreen("menu")));
+  $("nav-collection").addEventListener("click", () => showScreen("collection"));
+  document.querySelector(".brand").addEventListener("click", (event) => { event.preventDefault(); showScreen("menu"); });
+  $("collection-tabs").addEventListener("click", (event) => {
+    const button = event.target.closest("[data-collection]");
+    if (!button) return;
+    collectionTab = button.dataset.collection;
+    collectionScroll = 0;
+    renderCollection();
+    saveProgress();
   });
   $("sound-button").addEventListener("click", () => {
     soundEnabled = !soundEnabled;
@@ -2201,7 +2380,7 @@
     if (event.target === $("help-overlay")) closeHelp();
   });
   document.addEventListener("keydown", (event) => {
-    const overlay = ["reset-overlay", "sell-overlay", "reward-overlay", "tutorial-overlay", "help-overlay", "shop-overlay", "end-overlay"].map($).find((element) => !element.hidden);
+    const overlay = ["reset-overlay", "sell-overlay", "reward-overlay", "tutorial-overlay", "help-overlay", "shop-overlay", "end-overlay"].map($).find((element) => !element.hidden && element.getClientRects().length);
     if (overlay) {
       if (overlay.id === "tutorial-overlay") {
         if (event.key === "Escape") { event.preventDefault(); closeTutorial(); return; }
@@ -2231,7 +2410,7 @@
       }
       return;
     }
-    if (event.repeat || event.ctrlKey || event.metaKey || event.altKey) return;
+    if (screen !== "game" || event.repeat || event.ctrlKey || event.metaKey || event.altKey) return;
     const key = event.key.toLowerCase();
     if (["1", "2", "3", "4", "5", "6"].includes(key) && state.phase === "rolled") {
       event.preventDefault();
@@ -2275,6 +2454,5 @@
   catch (error) { pauseSaving(error); }
   if (!restoreProgress(savedText)) {
     startRun();
-    if (!tutorialSeen) openTutorial();
   }
 })();

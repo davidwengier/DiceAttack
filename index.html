@@ -7,11 +7,43 @@
   <meta name="description" content="Roll the dice. Defy the darkness. A turn-based dungeon adventure by Max.">
   <title>Dice Attack — Roll against the darkness</title>
   <link rel="icon" href="favicon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="style.css?v=12">
-  <script src="game.js?v=12" defer></script>
+  <link rel="stylesheet" href="style.css?v=13">
+  <script src="game.js?v=13" defer></script>
 </head>
-<body>
+<body data-screen="menu">
   <noscript><p style="padding: 24px; text-align: center;">Dice Attack needs JavaScript to roll the dice. Enable JavaScript in your browser to play.</p></noscript>
+  <main class="menu-screen" id="menu-screen">
+    <div class="menu-scene" id="menu-scene" aria-hidden="true"></div>
+    <div class="menu-shade"></div>
+    <div class="menu-content">
+      <p class="eyebrow">A GAME BY MAX · A DICEBOUND ADVENTURE</p>
+      <img class="menu-emblem" src="favicon.svg" width="80" height="80" alt="">
+      <h1>DICE<span>ATTACK</span></h1>
+      <p class="menu-tagline">Roll the dice.<br>Defy the darkness.</p>
+      <p class="menu-description">Five stages. Thirty worlds. One collection of dice that turns luck into power.</p>
+      <div class="menu-actions">
+        <button class="primary-button" id="menu-play">Begin adventure ↗</button>
+        <button class="secondary-button" id="menu-collection">✦ Explore collection</button>
+        <button class="reset-button" id="menu-new">↻ New adventure</button>
+      </div>
+      <p class="menu-progress" id="menu-progress"></p>
+      <p class="menu-save-note" id="menu-save-note" role="status">Your adventure saves automatically in this browser.</p>
+    </div>
+    <div class="menu-hero" id="menu-hero" aria-hidden="true"></div>
+    <div class="menu-features"><span>⚔ TURN-BASED COMBAT</span><span>◇ TEN DICE TYPES</span><span>✦ STACKING RELICS</span></div>
+  </main>
+  <main class="collection-screen" id="collection-screen" hidden>
+    <header class="collection-top"><button class="secondary-button" id="collection-back">← Main menu</button><span class="eyebrow">THE DICEBOUND ARCHIVE</span><button class="secondary-button" id="collection-resume">Resume adventure ↗</button></header>
+    <p class="eyebrow">KNOW YOUR POWER</p><h1>Your collection.</h1>
+    <p class="collection-intro">Browse every die, material, ability, upgrade, relic, and enemy. Ownership belongs to your current adventure; a new adventure starts a fresh collection.</p>
+    <p class="menu-save-note" id="collection-save-status" role="status">PROGRESS SAVED ON THIS BROWSER</p>
+    <div class="shop-tabs collection-tabs" id="collection-tabs" aria-label="Collection categories">
+      <button data-collection="dice" aria-pressed="true">Dice</button><button data-collection="materials" aria-pressed="false">Materials</button><button data-collection="abilities" aria-pressed="false">Abilities</button><button data-collection="upgrades" aria-pressed="false">Upgrades</button><button data-collection="relics" aria-pressed="false">Relics</button><button data-collection="enemies" aria-pressed="false">Enemies</button>
+    </div>
+    <p class="collection-count" id="collection-count" role="status"></p>
+    <div class="collection-grid" id="collection-grid"></div>
+  </main>
+  <nav class="game-navigation" id="game-navigation" aria-label="Game navigation" hidden><button class="secondary-button" id="nav-menu">← Main menu</button><button class="secondary-button" id="nav-collection">✦ Collection</button></nav>
   <div class="app">
     <header class="topbar">
       <a class="brand" href="./" aria-label="Dice Attack home">
@@ -122,11 +154,11 @@
       <p class="modal-description" id="shop-description"></p>
       <div class="shop-status" id="shop-status"></div>
       <div class="shop-tabs" id="shop-tabs" aria-label="Shop categories">
-        <button data-filter="all" aria-pressed="true">All wares</button><button data-filter="dice" aria-pressed="false">Dice</button><button data-filter="ability" aria-pressed="false">Abilities</button><button data-filter="skill" aria-pressed="false">Upgrades</button><button class="trading-tab" data-filter="owned" aria-pressed="false">◈ Sell my dice</button>
+        <button data-filter="all" aria-pressed="true">All wares</button><button data-filter="dice" aria-pressed="false">Dice</button><button data-filter="ability" aria-pressed="false">Abilities</button><button data-filter="skill" aria-pressed="false">Upgrades</button><button data-filter="relic" aria-pressed="false">✦ Relics · Stage 3+</button><button class="trading-tab" data-filter="owned" aria-pressed="false">◈ Sell my dice</button>
       </div>
       <div class="shop-stock" id="shop-stock"></div>
       <div class="shop-utilities"><button class="secondary-button" id="refresh-shop">↻ New stock · 5 gold</button><button class="secondary-button" id="shop-rest">✚ Restore 12 HP · 8 gold</button></div>
-      <div class="shop-footer"><button class="reset-button" id="shop-reset">↻ Reset run</button><p>Build your own collection.<br>Carry up to six dice.</p><button class="primary-button" id="leave-shop">Venture onward <span class="button-arrow">↗</span></button></div>
+      <div class="shop-footer"><div class="shop-navigation"><button class="reset-button" id="shop-reset">↻ Reset run</button><button class="secondary-button" id="shop-menu">← Main menu</button></div><p>Build your own collection.<br>Carry up to six dice.</p><button class="primary-button" id="leave-shop">Venture onward <span class="button-arrow">↗</span></button></div>
     </section>
   </div>
   <div class="overlay" id="reward-overlay" hidden>
@@ -150,6 +182,7 @@
       </div>
       <p class="modal-footnote" id="reward-wallet"></p>
       <button class="primary-button" id="reward-continue" disabled>Next round ↗</button>
+      <button class="secondary-button" id="reward-menu" disabled>← Main menu</button>
     </section>
   </div>
   <div class="overlay" id="sell-overlay" hidden>
@@ -163,7 +196,7 @@
   <div class="overlay" id="reset-overlay" hidden>
     <section class="modal end-modal" role="dialog" aria-modal="true" aria-labelledby="reset-title" tabindex="-1">
       <div class="modal-emblem">↻</div><p class="eyebrow">A FRESH ROLL OF FATE</p><h2 id="reset-title">Begin a different run?</h2>
-      <p class="modal-description">Your current gold, dice, abilities, and skills will be lost. Your best record stays. A new path awaits.</p>
+      <p class="modal-description">Your current gold, dice, abilities, upgrades, and relics will be lost. Your best record stays. A new path awaits.</p>
       <div class="reset-actions"><button class="secondary-button" id="cancel-reset">Keep this run</button><button class="primary-button" id="confirm-reset">Reset expedition ↗</button></div>
     </section>
   </div>
@@ -175,6 +208,7 @@
       <p class="modal-description" id="end-description"></p>
       <div class="run-stats" id="run-stats"></div>
       <button class="primary-button" id="restart-button">Begin a new expedition <span class="button-arrow">↗</span></button>
+      <button class="secondary-button" id="end-menu">← Main menu</button>
       <p class="modal-footnote">New dice. New chances. Your next adventure awaits.</p>
     </section>
   </div>
@@ -214,13 +248,14 @@
         <p><b>02 <strong>Build your collection.</strong></b> Attack dice deal their value as damage, with +3 on a six. Guard blocks; Heal restores health. Venom adds poison, Flame ignores shields, Blood attacks and heals, and Fortune earns gold and blocks. Frost deals half its value, rounded up, through shields and reduces enemy damage by that half-value for this turn. Lightning strikes twice on natural 5s and 6s. Bloom heals half its value, rounded up, and blocks half, rounded down. Hover or select a die for its exact effect.</p>
         <p><b>03 <strong>Discover stronger materials.</strong></b> Start with Base, Gold +2, Diamond +4, Ruby +6, Emerald +8, and Obsidian +10. Stage 2 unlocks Sapphire +12; stage 3 Sunstone +14; stage 4 Mythril +16; stage 5 Celestial +20. Open Rare materials in a shop card. Bonuses apply before calculating effects; criticals and Lightning double strikes depend on the rolled face, not the material bonus.</p>
         <p><b>04 <strong>A market worth visiting.</strong></b> Rounds 5, 10, 15, 20, 25, and 30 of every stage are shops only. Core upgrades can reach level 3 in stage 1, then 6, 9, 12, and 15 in later stages. New upgrades include starting shields, bow power, stronger poison, lifesteal, damage reduction, and a minimum die roll. Each new stage unlocks three more abilities. Carry up to six dice. Open <strong>Sell my dice</strong> and confirm a sale for half its purchase price, rounded down; starter dice refund 0. Keep at least one damage-dealing die.</p>
-        <p><b>✦ <strong>Build your ability arsenal.</strong></b> Every ability is a free action, usable once per battle, and resets in the next battle. Later markets offer barriers, better healing, armor breaking, extra rerolls, poison arrows, group freezing, and a bow volley that hits every enemy. Bow abilities require Bow and an existing roll; their damage comes from your offensive dice's rolled faces plus material bonuses, without consuming those rolls. Melee spells still cannot hurt flying enemies. Time Lock and Armor Break can affect them without dealing damage.</p>
+        <p><b>✦ <strong>Build your ability arsenal.</strong></b> Every ability is a free action, usable once per battle, and resets in the next battle. Later markets offer barriers, better healing, armor breaking, extra rerolls, poison arrows, group freezing, and a bow volley that hits every enemy. Bow abilities require Bow and an existing roll; their damage comes from your offensive dice's effective rolls, including material bonuses and relic multipliers, without consuming those rolls. Melee spells still cannot hurt flying enemies. Time Lock and Armor Break can affect them without dealing damage.</p>
+        <p><b>✦ <strong>Collect stacking relics.</strong></b> Stage 3+ markets have a Relics tab, with one relic family for each of the ten dice types. Buy each version once per adventure: stage 3 adds ×2, stage 4 adds ×4, and stage 5 adds ×8. They do not replace each other: all three multiply together for ×64. Earlier versions remain available in later markets. Relics multiply (rolled face + material bonus) before the die's effects; flat upgrade bonuses and natural-face critical rules stay unchanged. Every copy of that dice type benefits. Venom relics also multiply the poison cap.</p>
         <p><b>05 <strong>Keep your unused shield.</strong></b> Enemy turns resolve automatically. Damage spends only what it needs: 6 shield against 2 damage leaves 4. Shields clear at the next battle or shop; Prepared Defenses grants fresh shield at the start of every battle. Poison ticks before each affected enemy acts, starts with a cap of 12, and loses 1 strength per tick. Venomcraft raises its strength and cap. Flame, Frost, and poison ignore enemy shields. Iron Resolve reduces incoming damage before shield is spent. Enemies gain +1 damage every three turns.</p>
         <p><b>06 <strong>One chest for the whole round.</strong></b> Early battles contain one enemy; later worlds feature groups of one to three. Click an enemy card to choose your target. Dead enemies never act. Kill gold is banked, not paid out individually. Defeating the last enemy opens one animated chest and pays the whole round's gold exactly once. Health recovery from each kill still helps you survive the remaining enemies. Fortune dice earn their own gold immediately.</p>
         <p><b>07 <strong>Aim for the skies.</strong></b> At the start of stage 2 you receive a free bow and meet your first flying enemy. Switch between Melee and Bow before or after rolling, without spending your turn or changing your rolls. Bow attacks use all your offensive dice's normal damage and effects as arrows. Flying enemies can only be damaged by bow attacks, including poison applied by those arrows; melee and Ember Bolt cannot reach them. Healing and Frost Seal still work. The bow works on ground enemies too.</p>
-        <p><b>08 <strong>Five stages. Thirty different worlds.</strong></b> Explore forests and crypts, floating islands and sky temples, royal foundries and crystal marches, living labyrinths and leviathan bones, then eternal clocks, worldfire volcanoes, and the heart of reality. Each world has its own scenery. Each stage has its own enemy roster, world guardians, and final guardian: sky beasts, royal machines, ancient wildlife, and dragons join the darkness of stage 1. Every stage has 31 rounds, six worlds, and six markets. Your gear carries forward; new stages restore health. Dice remain throughout all 155 rounds.</p>
+        <p><b>08 <strong>Five stages. Thirty different worlds.</strong></b> Explore forests and crypts, floating islands and sky temples, royal foundries and crystal marches, living labyrinths and leviathan bones, then eternal clocks, worldfire volcanoes, and the heart of reality. Each world has its own scenery. Each stage has its own enemy roster, world guardians, and final guardian: sky beasts, royal machines, ancient wildlife, and dragons join the darkness of stage 1. Every stage has 31 rounds, six worlds, and six markets. Later stages no longer reset to low-health enemies: their leading monsters start stronger than the previous stage's final guardian. Escorts are weaker than leaders. Your gear and relics carry forward; new stages restore your health. Dice remain throughout all 155 rounds.</p>
       </div>
-      <p class="modal-description">Your run and tutorial step save automatically on this browser. Refreshing, closing the page, or switching tabs restores your dice, health, shields, gold, shop stock, and progress. Interrupted animations return to the last completed action, without spending or awarding anything twice. The tutorial pops up on your first visit; replay it with Learn to play. Reset run replaces the saved adventure. Saves are local to this browser, not shared across devices.</p>
+      <p class="modal-description">Use Main menu to pause and Collection to see what everything does. Owned entries come first, then rarity. Your run, relics, current screen, collection tab, and tutorial step save automatically in this browser. Refreshing, closing the page, or switching tabs restores your dice, health, shields, gold, shop stock, and progress. Interrupted animations return to the last completed action, without spending or awarding anything twice. The tutorial pops up when you first begin an adventure; replay it with Learn to play. Reset run replaces the saved adventure. Saves are local to this browser, not shared across devices.</p>
       <p class="modal-footnote">Keyboard: 1–6 select dice · R reroll · Space roll / fight · Escape close dialogs</p>
       <button class="primary-button" id="help-play-button">Let fate decide <span class="button-arrow">↗</span></button>
     </section>

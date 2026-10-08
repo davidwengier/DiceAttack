@@ -20,6 +20,71 @@ button:focus-visible, a:focus-visible { outline: 2px solid var(--gold); outline-
 button { color: inherit; }
 button, a { touch-action: manipulation; }
 [hidden] { display: none !important; }
+body:not([data-screen="game"]) .app, body:not([data-screen="game"]) .overlay:not(#reset-overlay) { display: none !important; }
+body[data-screen="game"] { padding-bottom: 65px; }
+.menu-screen { min-height: 100svh; position: relative; display: flex; align-items: center; overflow: hidden; isolation: isolate; padding: 85px max(7vw, 24px) 120px; }
+.menu-scene, .menu-shade { position: absolute; inset: 0; z-index: -2; }
+.menu-scene svg { width: 100%; height: 100%; object-fit: cover; opacity: .65; }
+.menu-shade { z-index: -1; background: linear-gradient(90deg, #09131bee 0%, #09131bb5 50%, #09131b40), linear-gradient(0deg, #09131b 0%, transparent 40%); }
+.menu-content { max-width: 620px; }
+.menu-emblem { margin: 20px 0; filter: drop-shadow(0 0 25px #e2c18040); }
+.menu-content h1 { font-size: clamp(46px, 7.5vw, 98px); line-height: 1; letter-spacing: -3px; }
+.menu-content h1 span { display: block; color: var(--gold); }
+.menu-tagline { font: 500 clamp(20px, 2.5vw, 30px)/1.5 "Cinzel", Georgia, serif; color: #dce7e0; margin: 25px 0 14px; }
+.menu-description { color: #abc0c2; max-width: 400px; line-height: 1.8; font-size: 14px; }
+.menu-actions { display: flex; flex-direction: column; align-items: flex-start; gap: 12px; margin: 30px 0 25px; }
+.menu-actions .primary-button, .menu-actions .secondary-button { min-width: 260px; text-align: center; justify-content: center; }
+.menu-actions .reset-button { padding: 10px 0; }
+.menu-progress { color: var(--gold); font-size: 12px; line-height: 1.8; }
+.menu-save-note { color: var(--muted); font-size: 11px; }
+.menu-hero { position: absolute; width: clamp(230px, 35vw, 520px); right: 8%; bottom: 17%; filter: drop-shadow(0 0 65px #afd9c81a); pointer-events: none; z-index: -1; }
+.menu-hero svg { width: 100%; display: block; }
+.menu-features { position: absolute; left: max(7vw, 24px); right: 24px; bottom: 35px; display: flex; flex-wrap: wrap; gap: 28px; color: #a9c2bb; font-size: 10px; letter-spacing: 2px; }
+.collection-screen { max-width: 1300px; margin: auto; padding: 25px 48px 65px; }
+.collection-top { display: flex; align-items: center; justify-content: space-between; gap: 15px; padding-bottom: 35px; }
+.collection-top .eyebrow { margin: 0; text-align: center; }
+.collection-screen > h1 { font-size: clamp(28px, 4vw, 46px); }
+.collection-intro { max-width: 740px; color: #a2b5bb; font-size: 13px; line-height: 1.8; margin: 16px 0 24px; }
+.collection-tabs { flex-wrap: wrap; }
+.collection-count { color: var(--muted); font-size: 11px; margin: 20px 0; }
+.collection-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; }
+.collection-card { padding: 25px; border-radius: 14px; border: 1px solid #8bacbe27; background: linear-gradient(135deg, #20313c85, #14212c); display: flex; flex-direction: column; align-items: flex-start; min-width: 0; }
+.collection-card.owned-entry { border-color: #e2c18070; background: linear-gradient(135deg, #65523824, #16262f); }
+.collection-card.locked-entry { border-style: dashed; }
+.collection-icon { font-size: 35px; color: var(--gold); margin-bottom: 18px; }
+.collection-card .shop-card-kind { line-height: 1.7; }
+.collection-card h2 { font: 600 18px/1.5 "Cinzel", Georgia, serif; margin: 10px 0; color: #e7e5d7; }
+.collection-card p { color: #a7b9bf; font-size: 12px; line-height: 1.9; margin: 0 0 20px; }
+.collection-card small { margin-top: auto; color: #d3bd8b; font-size: 10px; line-height: 1.8; }
+.collection-portrait { height: 160px; width: 100%; text-align: center; margin-bottom: 15px; }
+.collection-portrait svg { height: 100%; width: 160px; }
+.game-navigation { position: fixed; bottom: 12px; left: 50%; transform: translateX(-50%); display: flex; gap: 8px; z-index: 10; background: #0b171ff2; padding: 8px; border: 1px solid #c9b78530; border-radius: 12px; box-shadow: 0 4px 20px #0005; white-space: nowrap; }
+.game-navigation button { font-size: 10px; padding: 9px 14px; }
+.shop-navigation { display: flex; flex-direction: column; gap: 9px; align-items: flex-start; }
+.shop-navigation .secondary-button { font-size: 10px; }
+.relic-card { background: radial-gradient(ellipse at top, #69523733, #162530); border-color: #ceac7359; }
+.relic-card .relic-factor { display: block; font: 700 32px "Cinzel", Georgia, serif; color: var(--gold); margin: 5px 0 18px; }
+#reward-menu, #end-menu { margin-top: 16px; }
+@media (max-width: 900px) {
+  .menu-hero { right: -5%; opacity: .55; width: 45vw; }
+  .collection-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .collection-screen { padding-inline: 24px; }
+  .collection-top > .eyebrow { display: none; }
+}
+@media (max-width: 540px) {
+  .menu-screen { padding: 40px 24px 115px; }
+  .menu-content > .eyebrow { font-size: 8px; letter-spacing: 1.2px; }
+  .menu-content h1 { font-size: 55px; }
+  .menu-hero { right: -90px; bottom: 110px; width: 310px; opacity: .18; }
+  .menu-emblem { width: 56px; height: 56px; margin: 18px 0; }
+  .menu-features { gap: 12px; font-size: 8px; letter-spacing: 1px; }
+  .menu-actions .primary-button, .menu-actions .secondary-button { min-width: 240px; }
+  .collection-screen { padding: 18px 15px 45px; }
+  .collection-top { gap: 8px; }
+  .collection-top button { padding: 11px; font-size: 10px; }
+  .collection-grid { grid-template-columns: 1fr; gap: 12px; }
+  .collection-card { padding: 22px; }
+}
 .app { max-width: 1300px; margin: auto; padding: 0 48px; }
 .topbar { height: 104px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #ffffff0c; }
 .brand { display: flex; align-items: center; gap: 12px; color: #f1e7d0; text-decoration: none; font-family: "Cinzel", Georgia, serif; font-size: 22px; font-weight: 800; letter-spacing: .5px; }
