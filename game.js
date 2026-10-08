@@ -15,7 +15,11 @@
     diamond: { name: "Diamond", icon: "♦", bonus: 4, priceMultiplier: 2.8 },
     ruby: { name: "Ruby", icon: "◆", bonus: 6, priceMultiplier: 3.8 },
     emerald: { name: "Emerald", icon: "⬡", bonus: 8, priceMultiplier: 5 },
-    obsidian: { name: "Obsidian", icon: "✧", bonus: 10, priceMultiplier: 6.5 }
+    obsidian: { name: "Obsidian", icon: "✧", bonus: 10, priceMultiplier: 6.5 },
+    sapphire: { name: "Sapphire", icon: "♦", bonus: 12, priceMultiplier: 9, unlock: 2 },
+    sunstone: { name: "Sunstone", icon: "☀", bonus: 14, priceMultiplier: 12, unlock: 3 },
+    mythril: { name: "Mythril", icon: "✥", bonus: 16, priceMultiplier: 16, unlock: 4 },
+    celestial: { name: "Celestial", icon: "✶", bonus: 20, priceMultiplier: 22, unlock: 5 }
   };
   const diceTypes = {
     attack: { name: "Attack Die", label: "ATTACK", icon: "⚔", price: 18, offensive: true, text: "Deal your roll as damage. Sixes add +3 critical damage, improved by Loaded Fate." },
@@ -30,9 +34,21 @@
     bloom: { name: "Bloom Die", label: "BLOOM", icon: "❀", price: 24, text: "Heal half your roll, rounded up, and gain half, rounded down, as lasting shield. Healing and guard skills improve it." }
   };
   const abilities = {
-    fireball: { name: "Ember Bolt", icon: "✦", price: 24, text: "Deal 10 damage ignoring shields. One free cast per battle." },
-    salve: { name: "Healing Spring", icon: "✚", price: 22, text: "Restore 14 health. One free cast per battle." },
-    freeze: { name: "Frost Seal", icon: "❄", price: 26, text: "Freeze the enemy, skipping its next action. One free cast per battle." }
+    fireball: { name: "Ember Bolt", icon: "✦", price: 24, effect: "damage", amount: 10, text: "Deal 10 damage ignoring shields. One free cast per battle. Cannot reach flying enemies." },
+    salve: { name: "Healing Spring", icon: "✚", price: 22, effect: "heal", amount: 14, text: "Restore 14 health. One free cast per battle." },
+    freeze: { name: "Frost Seal", icon: "❄", price: 26, text: "Freeze the enemy, skipping its next action. One free cast per battle.", effect: "freeze" },
+    bulwark: { name: "Iron Bastion", icon: "⬡", price: 48, unlock: 2, effect: "shield", amount: 18, text: "Gain 18 + twice your Moonward level in shield. Free once per battle." },
+    arrow: { name: "Piercing Arrow", icon: "➶", price: 56, unlock: 2, effect: "damage", bow: true, rolled: true, multiplier: .8, text: "Bow only. Deal 80% of your offensive dice's effective rolls as extra piercing damage. Keep your rolls. Free once per battle." },
+    focus: { name: "Second Chance", icon: "↻", price: 52, unlock: 2, effect: "reroll", text: "Gain two rerolls for this turn, up to your normal allowance +2. Free once per battle." },
+    renewal: { name: "Royal Renewal", icon: "✚", price: 95, unlock: 3, effect: "heal", amount: 30, text: "Heal 30 + twice your Lifebloom level. Free once per battle." },
+    shatter: { name: "Armor Break", icon: "◇", price: 90, unlock: 3, effect: "shatter", text: "Destroy the target's entire shield. Does not deal damage; works on flying enemies. Free once per battle." },
+    venomshot: { name: "Venom Arrow", icon: "❧", price: 110, unlock: 3, effect: "poison", bow: true, rolled: true, text: "Bow only. Add poison equal to one quarter of your offensive dice's effective rolls, rounded up. Free once per battle." },
+    sanctuary: { name: "Sanctuary", icon: "❀", price: 170, unlock: 4, effect: "sanctuary", text: "Heal 20 + Lifebloom level and gain 20 + Moonward level in shield. Free once per battle." },
+    volley: { name: "Storm Volley", icon: "ϟ", price: 185, unlock: 4, effect: "damage", bow: true, rolled: true, all: true, multiplier: .5, text: "Bow only. Hit every living enemy for 50% of your offensive dice's effective rolls, ignoring armor. One chest if the group falls. Free once per battle." },
+    stasis: { name: "Time Lock", icon: "❄", price: 175, unlock: 4, effect: "freeze", all: true, text: "Freeze every living enemy for its next action. Free once per battle." },
+    nova: { name: "Starfall Arrow", icon: "✶", price: 280, unlock: 5, effect: "damage", bow: true, rolled: true, multiplier: 1.5, text: "Bow only. Deal 150% of your offensive dice's effective rolls as extra piercing damage. Free once per battle." },
+    aegis: { name: "Eternal Aegis", icon: "✥", price: 265, unlock: 5, effect: "shield", amount: 45, text: "Gain 45 + twice your Moonward level in shield. Free once per battle." },
+    rebloom: { name: "Dawn Rebirth", icon: "☀", price: 295, unlock: 5, effect: "fullheal", text: "Restore all missing health. Free once per battle." }
   };
   const memberTypes = {
     knight: { name: "You", title: "THE DICEBOUND", role: "Knight", icon: "⚔", hp: 40, die: "attack", ability: null, joins: 0, color: "#b2d1a0", perk: "Attack sixes deal critical damage." }
@@ -40,15 +56,29 @@
   const legacyMemberTypes = { ...memberTypes, healer: { hp: 32, joins: 4, ability: "salve" }, mage: { hp: 28, joins: 9, ability: "freeze" } };
   const MEMBER_FIELDS = ["hp", "maxHp", "shield", "collection", "dice", "selected", "rerolls", "abilities", "usedAbilities"];
   const skills = {
-    power: { name: "Ember Edge", icon: "⚔", price: 14, max: 3, text: "+1 damage per Attack, Blood, Flame, Frost, and Lightning strike.", apply: () => { state.power++; } },
-    ward: { name: "Moonward", icon: "⬡", price: 12, max: 3, text: "+1 shield per Guard, Fortune, and Bloom die.", apply: () => { state.ward++; } },
-    healing: { name: "Lifebloom", icon: "✚", price: 12, max: 3, text: "+1 healing per Heal, Blood, and Bloom die.", apply: () => { state.healing++; } },
-    vitality: { name: "Lionheart", icon: "♡", price: 16, max: 3, text: "+8 maximum health. Restore 8 health.", apply: () => { actor().maxHp += 8; actor().hp = Math.min(actor().maxHp, actor().hp + 8); } },
-    critical: { name: "Loaded Fate", icon: "✦", price: 14, max: 3, text: "+2 extra damage on Attack rolls of six.", apply: () => { state.critBonus += 2; } },
-    recovery: { name: "Second Wind", icon: "❧", price: 16, max: 3, text: "Recover 4 extra health after each kill. Heal for 4 now.", apply: () => { state.recovery += 4; actor().hp = Math.min(actor().maxHp, actor().hp + 4); } },
-    luck: { name: "Lucky Fingers", icon: "↻", price: 22, max: 1, text: "A second reroll on every turn.", apply: () => { state.extraRerolls = 1; } },
-    loot: { name: "Treasure Hunter", icon: "◈", price: 18, max: 3, text: "+25% kill gold per level, rounded up.", apply: () => { state.lootBonus += .25; } }
+    power: { name: "Ember Edge", icon: "⚔", price: 14, max: 15, perStage: 3, text: "+1 damage per Attack, Blood, Flame, Frost, and Lightning strike.", apply: () => { state.power++; } },
+    ward: { name: "Moonward", icon: "⬡", price: 12, max: 15, perStage: 3, text: "+1 shield per Guard, Fortune, and Bloom die.", apply: () => { state.ward++; } },
+    healing: { name: "Lifebloom", icon: "✚", price: 12, max: 15, perStage: 3, text: "+1 healing per Heal, Blood, and Bloom die.", apply: () => { state.healing++; } },
+    vitality: { name: "Lionheart", icon: "♡", price: 16, max: 15, perStage: 3, text: "+8 maximum health. Restore 8 health.", apply: () => { actor().maxHp += 8; actor().hp = Math.min(actor().maxHp, actor().hp + 8); } },
+    critical: { name: "Loaded Fate", icon: "✦", price: 14, max: 15, perStage: 3, text: "+2 extra damage on Attack rolls of six.", apply: () => { state.critBonus += 2; } },
+    recovery: { name: "Second Wind", icon: "❧", price: 16, max: 15, perStage: 3, text: "Recover 4 extra health after each kill. Heal for 4 now.", apply: () => { state.recovery += 4; actor().hp = Math.min(actor().maxHp, actor().hp + 4); } },
+    luck: { name: "Lucky Fingers", icon: "↻", price: 22, max: 3, text: "One extra reroll per turn per level. A new level unlocks in stages 3 and 5.", apply: () => { state.extraRerolls++; } },
+    loot: { name: "Treasure Hunter", icon: "◈", price: 18, max: 15, perStage: 3, text: "+25% kill gold per level, rounded up.", apply: () => { state.lootBonus += .25; } },
+    barrier: { name: "Prepared Defenses", icon: "⬡", price: 48, max: 5, unlock: 2, text: "Start every new battle with 4 shield per level." },
+    archery: { name: "Skyhunter", icon: "➶", price: 55, max: 5, unlock: 2, text: "+2 power per level for Attack, Blood, Flame, Frost, and Lightning dice while using Bow." },
+    venomcraft: { name: "Venomcraft", icon: "❧", price: 85, max: 5, unlock: 3, text: "+1 poison per Venom die and +2 to the poison cap per level." },
+    hospitality: { name: "Restorative Rest", icon: "✚", price: 75, max: 5, unlock: 3, text: "Market healing restores 4 additional health per level for the same 8 gold." },
+    siphon: { name: "Soul Siphon", icon: "♡", price: 130, max: 5, unlock: 4, text: "Heal for 4% of your rolled attack and piercing totals per level, rounded down." },
+    resilience: { name: "Iron Resolve", icon: "✥", price: 140, max: 5, unlock: 4, text: "Reduce every incoming enemy strike by 1 per level, before shield is spent." },
+    floor: { name: "Fortune's Floor", icon: "✶", price: 220, max: 2, unlock: 5, text: "Your dice cannot roll below 2 at level 1 or below 3 at level 2. Applies to rerolls too." },
+    harvest: { name: "Golden Horizon", icon: "◈", price: 200, max: 3, unlock: 5, text: "Fortune dice earn 50% additional gold per level, rounded down." }
   };
+  const unlocked = (item, stage = stageFor(state.encounter)) => stage >= (item.unlock || 1);
+  function skillLimit(key, stage = stageFor(state.encounter)) {
+    const item = skills[key];
+    return !unlocked(item, stage) ? 0 : key === "luck" ? Math.ceil(stage / 2) : Math.min(item.max, item.perStage ? stage * item.perStage : item.max);
+  }
+  const poisonLimit = (profile = state) => 12 + (profile.skills.venomcraft || 0) * 2;
   const pipPositions = {
     1: [5], 2: [1, 9], 3: [1, 5, 9], 4: [1, 3, 7, 9],
     5: [1, 3, 5, 7, 9], 6: [1, 3, 4, 6, 7, 9]
@@ -121,6 +151,64 @@
     { name: "The Eclipse Herald", zone: 5, type: "demon", color: "#b990ce", boss: true, moves: [["drain", 1, "Eclipse"], ["heavy", 1.3, "Nightfall"], ["guard", 1, "Moonless ward"]] },
     { name: "The Starless Sovereign", zone: 5, type: "demon", color: "#d2abea", boss: true, final: true, moves: [["heavy", 1.3, "End of stars"], ["guard", 1, "Void crown"], ["drain", .9, "Consume the sky"], ["attack", 1, "Last light"]] }
   ];
+  const stageBestiary = [
+    [
+      [["Galecrest Falcon", "Canopy Coil", "Cloudnest Harrier", "Zephyr Watcher"], ["The Windwood Roc", "Lady of the Gales"], ["bird", "serpent", "bird", "automaton"], "#9bd9b9"],
+      [["Cloudbone Raven", "Aether Serpent", "Vaultwing Owl", "Floating Sentinel"], ["The Skycrypt Custodian", "The Pale Albatross"], ["bird", "serpent", "bird", "automaton"], "#b4bddf"],
+      [["Sunfeather Hawk", "Spirecoil Viper", "Golden Kite", "Sunfire Construct"], ["The Solar Phoenix", "The Spire Warden"], ["bird", "serpent", "bird", "automaton"], "#edc281"],
+      [["Cloudglass Owl", "Mistcoil Python", "Snowcrest Eagle", "Nimbus Keeper"], ["The Nimbus Colossus", "Queen of Cloudglass"], ["bird", "serpent", "bird", "automaton"], "#a8e8ed"],
+      [["Storm Petrel", "Thundercoil", "Rainwing Kite", "Lightning Sentry"], ["The Thunder Roc", "The Storm Admiral"], ["bird", "serpent", "bird", "automaton"], "#80b5df"],
+      [["Astral Crane", "Halocoil Serpent", "Mooncrest Harrier", "Aerie Watcher"], ["The Celestial Gryphon", "The Halo Sentinel"], ["bird", "serpent", "bird", "automaton"], "#d4b2ed"]
+    ],
+    [
+      [["Crownroot Knight", "Royal Gearhound", "Gilded Page", "Briarwork Sentry"], ["The Crownwood Champion", "The Brass Duchess"], ["automaton", "wolf", "skeleton", "golem"], "#bdbd82"],
+      [["Necropolis Bailiff", "Tombgear Hound", "Royal Revenant", "Marble Custodian"], ["The Tomb Chancellor", "The Ivory Regent"], ["automaton", "wolf", "skeleton", "golem"], "#c5bccb"],
+      [["Cinderwork Soldier", "Furnace Hound", "Embercourt Duelist", "Foundry Sentinel"], ["The Furnace Marshal", "The Cinder Empress"], ["automaton", "wolf", "skeleton", "golem"], "#d59e6b"],
+      [["Prismguard Knight", "Crystal Gearwolf", "Marches Duelist", "Gemwork Keeper"], ["The Prismatic General", "The Crystal Baron"], ["automaton", "wolf", "skeleton", "golem"], "#a9c9e8"],
+      [["Pearlwork Soldier", "Coastal Gearhound", "Saltcourt Corsair", "Tidal Custodian"], ["The Pearl Admiral", "The Clocktide Regent"], ["automaton", "wolf", "skeleton", "golem"], "#91c9bd"],
+      [["Constellation Knight", "Comet Gearwolf", "Starcourt Duelist", "Orrery Sentinel"], ["The Orrery Architect", "The Broken Star Prince"], ["automaton", "wolf", "skeleton", "golem"], "#c3a3d9"]
+    ],
+    [
+      [["Labyrinth Stag", "Vineback Beetle", "Mothwing Seer", "Rootcoil Adder"], ["The Labyrinth Hart", "The Verdant Broodmother"], ["stag", "beetle", "moth", "serpent"], "#98c59c"],
+      [["Echohorn Deer", "Vaultshell Scarab", "Memory Moth", "Whispercoil"], ["The Keeper of Echoes", "The Memory Scarab"], ["stag", "beetle", "moth", "serpent"], "#b6a6cf"],
+      [["Ashhorn Antelope", "Phoenix Scarab", "Firewing Moth", "Dunecoil Cobra"], ["The Immortal Firehart", "The Phoenix Brood"], ["stag", "beetle", "moth", "serpent"], "#ddad80"],
+      [["Aurora Elk", "Lightshell Beetle", "Ribbonwing Moth", "Polarcoil"], ["The Aurora Dreamer", "The Polar Broodmother"], ["stag", "beetle", "moth", "serpent"], "#a8d9d2"],
+      [["Reefhorn Hart", "Deepwater Scarab", "Foamwing Moth", "Leviathan Spawn"], ["The Abyssal Dreamhart", "The Leviathan Matron"], ["stag", "beetle", "moth", "serpent"], "#78bdbb"],
+      [["Moonless Stag", "Nightglass Beetle", "Eclipse Moth", "Shadowcoil"], ["The Night Dreamer", "The Eclipse Broodmother"], ["stag", "beetle", "moth", "serpent"], "#b295cc"]
+    ],
+    [
+      [["Dawnscale Wyrm", "Sunroot Basilisk", "Horizon Drake", "Firstlight Coil"], ["The Dawn Dragon", "The Root of Day"], ["dragon", "serpent", "dragon", "serpent"], "#e3c184"],
+      [["Eternity Wyrm", "Hourglass Basilisk", "Timeless Drake", "Pendulum Coil"], ["The Eternal Dragon", "The Keeper of Hours"], ["dragon", "serpent", "dragon", "serpent"], "#c4b6d8"],
+      [["Worldfire Wyrm", "Magmacrest Basilisk", "Pyre Drake", "Caldera Coil"], ["The Worldfire Dragon", "The Molten Worldheart"], ["dragon", "serpent", "dragon", "serpent"], "#df9574"],
+      [["Glacier Wyrm", "Icecrest Basilisk", "Blizzard Drake", "Frostheart Coil"], ["The Endless Ice Dragon", "The Glacier Heart"], ["dragon", "serpent", "dragon", "serpent"], "#a6dce9"],
+      [["Starsea Wyrm", "Nebula Basilisk", "Galaxy Drake", "Cometcoil"], ["The Star Ocean Dragon", "The Tide of Infinity"], ["dragon", "serpent", "dragon", "serpent"], "#a6b7e8"],
+      [["Riftheart Wyrm", "Reality Basilisk", "Voidheart Drake", "Infinity Coil"], ["The Reality Dragon", "The World Beyond"], ["dragon", "serpent", "dragon", "serpent"], "#d6b0db"]
+    ]
+  ];
+  const creatureMoves = {
+    bird: [["attack", .8, "Wing dart"], ["heavy", 1.4, "Diving strike"], ["guard", .8, "Feather ward"]],
+    moth: [["attack", .8, "Dream dust"], ["heavy", 1.4, "Lunar flutter"], ["guard", .8, "Silken veil"]],
+    serpent: [["drain", .8, "Siphoning fang"], ["heavy", 1.3, "Coiling crush"], ["attack", 1, "Tail lash"]],
+    automaton: [["guard", 1.1, "Mechanical bulwark"], ["heavy", 1.4, "Piston smash"], ["attack", .8, "Gearblade"]],
+    stag: [["heavy", 1.3, "Antler charge"], ["drain", .8, "Wild hunger"], ["guard", .9, "Spirit bark"]],
+    beetle: [["guard", 1.2, "Carapace"], ["attack", 1, "Mandible snap"], ["heavy", 1.3, "Shell charge"]],
+    dragon: [["heavy", 1.4, "Dragon breath"], ["guard", 1, "Scale fortress"], ["drain", .9, "Ancient hunger"]],
+    wolf: [["attack", .9, "Clockwork pounce"], ["heavy", 1.4, "Gearfang bite"], ["guard", .7, "Brass plating"]],
+    skeleton: [["heavy", 1.3, "Royal cleaver"], ["guard", 1, "Court armor"], ["attack", .9, "Duelist slash"]],
+    golem: [["guard", 1.2, "Living fortress"], ["heavy", 1.4, "Monument crush"], ["drain", .7, "Core siphon"]]
+  };
+  stageBestiary.forEach((worlds, index) => {
+    const homeStage = index + 2;
+    worlds.forEach(([regulars, guardians, types, color], zone) => {
+      [...regulars, ...guardians].forEach((name, i) => {
+        const type = homeStage === 4 && i === 5 && zone !== 4 ? "beetle" : types[i < 4 ? i : (i - 4) * 3];
+        monsters.push({ name, zone, homeStage, type, color, boss: i >= 4, flying: ["bird", "moth", "dragon"].includes(type), moves: creatureMoves[type] });
+      });
+    });
+    const [name, type] = [["The Tempest Emperor", "bird"], ["The Clockwork Monarch", "automaton"], ["The Ancient Dreamer", "stag"], ["The Riftheart Dragon", "dragon"]][index];
+    monsters.push({ name, type, homeStage, zone: 5, boss: true, final: true, color: worlds[5][3], flying: ["bird", "dragon"].includes(type),
+      moves: [...creatureMoves[type], ["heavy", 1.5, ["Skyfall", "Kingdom Crusher", "Dream Collapse", "Reality Collapse"][index]]] });
+  });
   const omens = [
     { name: "Gilded Skies", text: "+4 gold from every kill", gold: 4 },
     { name: "Lifebloom Mist", text: "+1 healing from Heal, Blood, and Bloom dice", healing: 1 },
@@ -154,23 +242,28 @@
       };
     };
     const route = zones.flatMap((zone, zoneIndex) => {
-      const regulars = shuffle(monsters.filter((monster) => monster.zone === zoneIndex && !monster.boss && (stage >= 2 || !monster.flying))).slice(0, 3);
-      if (stage === 2 && zoneIndex === 0) regulars[0] = monsters.find((monster) => monster.zone === 0 && monster.flying);
-      const boss = shuffle(monsters.filter((monster) => monster.zone === zoneIndex && monster.boss && !monster.final))[0];
+      const pool = monsters.filter((monster) => (monster.homeStage || 1) === stage && monster.zone === zoneIndex && (stage >= 2 || !monster.flying));
+      const regulars = shuffle(pool.filter((monster) => !monster.boss)).slice(0, 3);
+      if (stage === 2 && zoneIndex === 0 && !regulars[0].flying) {
+        const flyer = regulars.findIndex((monster) => monster.flying);
+        if (flyer >= 0) [regulars[0], regulars[flyer]] = [regulars[flyer], regulars[0]];
+        else regulars[0] = pool.find((monster) => !monster.boss && monster.flying);
+      }
+      const boss = shuffle(pool.filter((monster) => monster.boss && !monster.final))[0];
       const battles = [...regulars, boss].map((monster, slot) => {
         const index = zoneIndex * SHOP_INTERVAL + slot;
         return addEnemyGroup(makeBattle(monster, index, health[zoneIndex][slot], damage[zoneIndex][slot]), slot);
       });
       return [...battles, { stage, kind: "shop", name: "The Wayfarer's Market", zone: zoneIndex }];
     });
-    route.push(addEnemyGroup(makeBattle(monsters.find((monster) => monster.final), STAGE_LENGTH - 1, 280, 19), 3));
+    route.push(addEnemyGroup(makeBattle(monsters.find((monster) => monster.final && (monster.homeStage || 1) === stage), STAGE_LENGTH - 1, 280, 19), 3));
     return route;
   }
   function generateRun() { return stages.flatMap((stage, index) => generateStage(index + 1)); }
 
   function addEnemyGroup(round, slot) {
     const count = round.zone === 0 ? 1 : round.zone === 1 ? slot === 0 ? 1 : 2 : slot === 3 ? 3 : slot === 0 ? 2 : 1 + Math.floor(Math.random() * 3);
-    const candidates = shuffle(monsters.filter((monster) => monster.zone === round.zone && !monster.boss && ((round.stage || 1) >= 2 || !monster.flying) && !round.name.endsWith(monster.name)));
+    const candidates = shuffle(monsters.filter((monster) => (monster.homeStage || 1) === (round.stage || 1) && monster.zone === round.zone && !monster.boss && ((round.stage || 1) >= 2 || !monster.flying) && !round.name.endsWith(monster.name)));
     const group = [{ ...round }];
     for (let i = 1; i < count; i++) {
       const monster = candidates[i - 1];
@@ -202,7 +295,7 @@
   let savingPaused = false;
   let scrollSaveTimer;
   const wait = (ms) => new Promise((resolve) => setTimeout(resolve, reducedMotion ? Math.min(ms, 25) : ms));
-  const rollDie = () => Math.floor(Math.random() * 6) + 1;
+  const rollDie = () => Math.max(1 + (state.skills.floor || 0), Math.floor(Math.random() * 6) + 1);
 
   function actor() { return state.party[state.actorIndex]; }
   function targetEnemy() { return state.enemies[state.target]; }
@@ -242,7 +335,7 @@
   function saveProgress(force = false) {
     if (!state || restoring || savingPaused || (!force && document.hidden) || !stablePhases.includes(state.phase) || practice?.busy) return;
     const snapshot = {
-      version: 4,
+      version: 5,
       state: { ...state, id: undefined, party: state.party.map((member) => ({ ...member, usedAbilities: [...member.usedAbilities] })), expandedOffers: [...state.expandedOffers] },
       tutorialSeen, tutorialStep: practice ? practice.step : null,
       journal: [...$("battle-log").children].map((entry) => entry.lastChild.textContent),
@@ -386,14 +479,21 @@
     return result;
   }
 
+  function upgradeWorlds(saved) {
+    validateSave(saved);
+    const route = generateRun();
+    return { ...saved, version: 5, state: { ...saved.state, encounters: saved.state.encounters.map((round, i) => i > saved.state.encounter ? route[i] : round) },
+      journal: ["New stage enemies await beyond this round. Markets unlock more upgrades, abilities, and materials in every stage.", ...saved.journal].slice(0, 3) };
+  }
+
   function validateSave(saved) {
     const require = (valid, field) => { if (!valid) throw new Error(`Invalid saved ${field}.`); };
     const integer = (value, min = 0, max = Number.MAX_SAFE_INTEGER) => Number.isSafeInteger(value) && value >= min && value <= max;
     const object = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
     const keys = (list, catalog) => Array.isArray(list) && new Set(list).size === list.length && list.every((key) => typeof key === "string" && Object.hasOwn(catalog, key));
     const die = (value) => object(value) && typeof value.type === "string" && typeof value.tier === "string" && Object.hasOwn(diceTypes, value.type) && Object.hasOwn(diceTiers, value.tier) && integer(value.id, 1) && integer(value.paidPrice);
-    require(object(saved) && [2, 3, 4].includes(saved.version) && object(saved.state) && (saved.version === 4 || typeof saved.relaxedTiming === "boolean"), "format");
-    const legacy = saved.version !== 4;
+    require(object(saved) && [2, 3, 4, 5].includes(saved.version) && object(saved.state) && (saved.version >= 4 || typeof saved.relaxedTiming === "boolean"), "format");
+    const legacy = saved.version < 4;
     const length = legacy ? STAGE_LENGTH : RUN_LENGTH;
     const catalog = saved.version === 2 ? legacyMemberTypes : memberTypes;
     const s = saved.state;
@@ -420,11 +520,12 @@
     require((s.phase === "shop") === (s.encounters[s.encounter].kind === "shop") && (s.phase !== "won" || s.encounter === length - 1), "round phase");
     require(object(s.skills) && Object.entries(s.skills).every(([key, level]) => Object.hasOwn(skills, key) && integer(level, 1, skills[key].max)), "skills");
     require(s.power === (s.skills.power || 0) && s.ward === (s.skills.ward || 0) && s.healing === (s.skills.healing || 0) && s.critBonus === 3 + (s.skills.critical || 0) * 2 && s.recovery === (s.skills.recovery || 0) * 4 && s.lootBonus === (s.skills.loot || 0) * .25 && s.extraRerolls === (s.skills.luck || 0), "skill bonuses");
+    require(saved.version !== 5 || Object.entries(s.skills).every(([key, level]) => level <= skillLimit(key, stageFor(s.encounter))), "upgrade unlocks");
     const expectedParty = Object.keys(catalog).filter((key) => catalog[key].joins <= s.completed);
     require(Array.isArray(s.party) && s.party.length === expectedParty.length && s.party.every((member, i) => object(member) && member.key === expectedParty[i]), "party");
     const ids = [];
     s.party.forEach((member) => {
-      require(member.maxHp === catalog[member.key].hp + (s.skills.vitality || 0) * 8 && integer(member.hp, 0, member.maxHp) && integer(member.shield) && integer(member.rerolls, 0, 1 + s.extraRerolls), "party health");
+      require(member.maxHp === catalog[member.key].hp + (s.skills.vitality || 0) * 8 && integer(member.hp, 0, member.maxHp) && integer(member.shield) && integer(member.rerolls, 0, 1 + s.extraRerolls + (Array.isArray(member.usedAbilities) && member.usedAbilities.includes("focus") ? 2 : 0)), "party health");
       require(Array.isArray(member.collection) && member.collection.length >= 1 && member.collection.length <= MAX_DICE && member.collection.every(die) && member.collection.some((owned) => diceTypes[owned.type].offensive), "member collection");
       ids.push(...member.collection.map((owned) => owned.id));
       require(Array.isArray(member.dice) && (member.dice.length === 0 || member.dice.length === member.collection.length) && member.dice.every((rolled, i) => die(rolled) && ["id", "type", "tier", "paidPrice"].every((key) => rolled[key] === member.collection[i][key]) && integer(rolled.value, 1, 6)), "member dice");
@@ -440,7 +541,7 @@
     require(Array.isArray(s.enemies) && s.enemies.length === source.length && integer(s.target, 0, s.enemies.length - 1) && integer(s.enemyCursor, 0, s.enemies.length), "current enemies");
     s.enemies.forEach((enemy, i) => {
       const definition = source[i];
-      require(object(enemy) && enemy.name === definition.name && enemy.maxHp === definition.hp && integer(enemy.hp, 0, enemy.maxHp) && integer(enemy.shield) && integer(enemy.poison, 0, 12) && integer(enemy.chill) && typeof enemy.frozen === "boolean" && typeof enemy.rewarded === "boolean" && enemy.rewarded === (enemy.hp === 0), "enemy status");
+      require(object(enemy) && enemy.name === definition.name && enemy.maxHp === definition.hp && integer(enemy.hp, 0, enemy.maxHp) && integer(enemy.shield) && integer(enemy.poison, 0, poisonLimit(s)) && integer(enemy.chill) && typeof enemy.frozen === "boolean" && typeof enemy.rewarded === "boolean" && enemy.rewarded === (enemy.hp === 0), "enemy status");
     });
     const won = s.enemies.every((enemy) => enemy.hp === 0);
     require((!["ready", "rolled", "lost"].includes(s.phase) || !won) && (!["ready", "rolled"].includes(s.phase) || s.enemies[s.target].hp > 0), "enemy target");
@@ -472,6 +573,7 @@
       if (saved.version === 1) saved = upgradeSave(saved);
       else if (saved.version === 2) saved = upgradePartySave(saved);
       if (saved.version === 3) saved = upgradeStages(saved);
+      if (saved.version === 4) saved = upgradeWorlds(saved);
       validateSave(saved);
     } catch (error) { pauseSaving(error); return false; }
     restoring = true;
@@ -706,7 +808,60 @@
     `, `<linearGradient id="demon-body" x2=".8" y2="1"><stop stop-color="#e9a17c"/><stop offset=".35" stop-color="${enemy.color}"/><stop offset="1" stop-color="#85445a"/></linearGradient><linearGradient id="demon-wing" x2=".5" y2="1"><stop stop-color="#784656"/><stop offset="1" stop-color="#3e3044"/></linearGradient><linearGradient id="demon-horn" x2=".6" y2="1"><stop stop-color="#eddbb6"/><stop offset="1" stop-color="#a68b7b"/></linearGradient>`);
   }
 
+  function exoticArtwork(enemy) {
+    const color = enemy.color;
+    const defs = `<linearGradient id="exotic-body" x2=".8" y2="1"><stop stop-color="${color}"/><stop offset="1" stop-color="#304150"/></linearGradient>`;
+    const eyes = '<path class="monster-eye" d="m104 76 10 3m15 0 10-3" stroke="#fff1c2" stroke-width="5" stroke-linecap="round"/>';
+    let body;
+    if (enemy.type === "bird") body = `
+      <path d="M90 128Q37 74 8 86l22 31-18 7 33 30-13 9 63 18m56-53q53-54 82-42l-22 31 18 7-33 30 13 9-63 18" fill="url(#exotic-body)" stroke="#39536a" stroke-width="4"/>
+      <path d="m95 157 10 44-22 29 36-13 5-21 19 34 25-2-23-33 5-39" fill="${color}" stroke="#39536a" stroke-width="4"/>
+      <ellipse cx="121" cy="136" rx="38" ry="58" fill="url(#exotic-body)" stroke="#39536a" stroke-width="4"/>
+      <path d="M89 73 80 47l26 11 16-33 11 29 25-8-10 30-5 38-22 17-25-18Z" fill="${color}" stroke="#39536a" stroke-width="4"/>
+      ${eyes}<path d="m112 91 10 28 12-27Z" fill="#e5c47e" stroke="#8f754d" stroke-width="2"/><path d="m106 140 15 22 15-22" fill="#ead6ac" opacity=".6"/>`;
+    else if (enemy.type === "moth") body = `
+      <path d="M106 119Q43 28 16 67q-7 52 73 78Q15 139 34 201q32 32 78-41m27-43q63-89 90-50 7 52-73 78 74-6 55 56-32 32-78-41" fill="url(#exotic-body)" stroke="#526173" stroke-width="4"/>
+      <g fill="#e5d4ab" opacity=".7"><ellipse cx="67" cy="101" rx="16" ry="23" transform="rotate(-30 67 101)"/><ellipse cx="178" cy="101" rx="16" ry="23" transform="rotate(30 178 101)"/><circle cx="76" cy="179" r="14"/><circle cx="170" cy="179" r="14"/></g>
+      <ellipse cx="122" cy="144" rx="16" ry="60" fill="${color}" stroke="#394b59" stroke-width="4"/>
+      <circle cx="122" cy="88" r="20" fill="${color}" stroke="#394b59" stroke-width="4"/>
+      <path d="m112 72-16-24m35 24 15-24" stroke="#ead9b0" stroke-width="4" stroke-linecap="round"/>
+      <path d="m113 84 4 2m10 0 5-2" stroke="#fff0c4" stroke-width="4"/>`;
+    else if (enemy.type === "serpent") body = `
+      <path d="M68 211q-40-40 19-54 52-11 83 12 59 50-10 59-91 16-77-35 8-30 59-22" fill="none" stroke="#344857" stroke-width="34"/>
+      <path d="M68 211q-40-40 19-54 52-11 83 12 59 50-10 59-91 16-77-35 8-30 59-22" fill="none" stroke="${color}" stroke-width="25"/>
+      <path d="M141 180q30-52-8-88" fill="none" stroke="#344857" stroke-width="40"/><path d="M141 180q30-52-8-88" fill="none" stroke="${color}" stroke-width="31"/>
+      <path d="m89 76 5-27 24-19 30 17 10 35-20 35-32-5Z" fill="url(#exotic-body)" stroke="#344857" stroke-width="4"/>
+      ${eyes}<path d="m109 97 5 17 6-13m13-3 6 16 5-19" fill="#f4e4be"/><path d="m123 112-3 17m0 0-7 5m7-5 7 5" stroke="#dc8b95" stroke-width="3"/><path d="m97 48-10-24 25 11m30 5 23-16-5 28" fill="#ddc58a"/>`;
+    else if (enemy.type === "automaton") body = `
+      <path d="m85 165-14 62 34 3 13-61m10 0 9 61 35-3-17-62" fill="#576a77" stroke="#283b49" stroke-width="5"/>
+      <path d="m64 105-22 7-15 69 32 9 23-52m89-34 26 11 11 60-31 13-18-53" fill="${color}" stroke="#283b49" stroke-width="5"/>
+      <path d="m74 94 48-15 47 15-9 76-36 24-41-24Z" fill="url(#exotic-body)" stroke="#283b49" stroke-width="5"/>
+      <circle cx="122" cy="139" r="22" fill="#273c48" stroke="#e8cb8f" stroke-width="5"/><path d="m122 120 9 18-9 19-9-19Z" fill="#d2eddd"/>
+      <path d="m86 46 35-19 35 19-4 44-30 22-32-21Z" fill="${color}" stroke="#283b49" stroke-width="5"/>${eyes}<path d="M108 95h29" stroke="#364552" stroke-width="5"/><path d="M122 27V13m-10 7h21" stroke="#e8cb8f" stroke-width="5"/>`;
+    else if (enemy.type === "stag") body = `
+      <path d="m76 145-12 80h18l18-74m34 1 13 74h18l-7-85" fill="${color}" stroke="#344950" stroke-width="4"/>
+      <ellipse cx="112" cy="145" rx="51" ry="34" fill="url(#exotic-body)" stroke="#344950" stroke-width="4"/>
+      <path d="m126 136 10-53 23-19 26 21-13 60-21 23Z" fill="url(#exotic-body)" stroke="#344950" stroke-width="4"/>
+      <path d="m139 80-21-26-5-31m9 34-26-6m23-6 13-17m35 48 22-33 4-26m-10 38 24-10m-19-10-13-14" fill="none" stroke="#e3d4a9" stroke-width="6" stroke-linecap="round"/>
+      <path d="m146 95 10 3m11-4 9-3" stroke="#e6f1be" stroke-width="4"/><path d="m159 121 10-4" stroke="#344950" stroke-width="4"/><path d="m66 133-15-20" stroke="${color}" stroke-width="12"/>`;
+    else if (enemy.type === "beetle") body = `
+      <g fill="none" stroke="#52677a" stroke-width="8"><path d="m86 121-45-24-20 22m63 30-49 9-14 27m64-4-36 29-2 22m111-111 45-24 20 22m-63 30 49 9 14 27m-64-4 36 29 2 22"/></g>
+      <ellipse cx="122" cy="159" rx="61" ry="66" fill="url(#exotic-body)" stroke="#344758" stroke-width="5"/>
+      <path d="M122 102v114m-45-98 34 37-32 34m89-71-34 37 32 34" fill="none" stroke="#e0d2a5" stroke-width="4"/>
+      <ellipse cx="122" cy="83" rx="36" ry="35" fill="${color}" stroke="#344758" stroke-width="5"/>${eyes}
+      <path d="m104 101-19 23 27-8m20-15 22 23-27-8m-21-61-14-28m40 30 14-28" fill="none" stroke="#d4c299" stroke-width="6"/>`;
+    else body = `
+      <path d="M89 123 31 51 11 117l30-12-10 58 55-22m66-16 58-72 20 66-30-12 10 58-55-22" fill="${color}" stroke="#485063" stroke-width="4"/>
+      <path d="M144 183q99 4 65 41-48 31-114-12" fill="none" stroke="${color}" stroke-width="19"/>
+      <path d="m91 162-21 63 32-1 18-38 24 42 30-3-20-66" fill="${color}" stroke="#485063" stroke-width="4"/>
+      <path d="m90 91 32-17 34 20 8 68-37 34-45-32Z" fill="url(#exotic-body)" stroke="#485063" stroke-width="4"/>
+      <path d="m87 72 5-26 29-19 33 22 2 37-26 31-30-8Z" fill="${color}" stroke="#485063" stroke-width="4"/>${eyes}
+      <path d="m94 48-16-24 33 12m34 7 25-20-10 31" fill="#ead3a3"/><path d="m106 99 8 9 6-8 9 10 7-10" fill="#f6e4b9"/><path d="m120 125 15 21-14 27-14-27Z" fill="#ead3a3" opacity=".8"/>`;
+    return svgFrame(body + (enemy.boss ? '<path d="m95 35-6-22 20 9 13-18 13 19 21-10-4 25" fill="#efc681" stroke="#95744b" stroke-width="3"/>' : ""), defs);
+  }
+
   function creatureArtwork(enemy) {
+    if (["bird", "moth", "serpent", "automaton", "stag", "beetle", "dragon"].includes(enemy.type)) return exoticArtwork(enemy);
     const color = enemy.color;
     const defs = `<linearGradient id="creature-body" x2=".8" y2="1"><stop stop-color="${color}"/><stop offset="1" stop-color="#364556"/></linearGradient><radialGradient id="creature-glow"><stop stop-color="#e5ffd6"/><stop offset="1" stop-color="${color}"/></radialGradient>`;
     if (enemy.type === "wolf") return svgFrame(`
@@ -773,7 +928,55 @@
     `, defs);
   }
 
-  function sceneArtwork(zone) {
+  function worldArtwork(stage, zone) {
+    const palettes = [
+      [["#365962", "#152f42", "#92cbb4"], ["#454665", "#222e48", "#c3badb"], ["#725642", "#352c42", "#edc889"], ["#3b6376", "#1d3b55", "#baeaf1"], ["#2c4268", "#142c48", "#a3c9f1"], ["#524368", "#282e4b", "#e0caed"]],
+      [["#485344", "#243731", "#cfcc91"], ["#514957", "#252b3d", "#cebed1"], ["#674437", "#2e2832", "#e8b378"], ["#384e6b", "#213347", "#bbd6f2"], ["#386068", "#1d3b48", "#c1e7d5"], ["#483b62", "#252740", "#d1b6ed"]],
+      [["#3b5947", "#192f30", "#b2dca2"], ["#4b3d5d", "#272d44", "#d5baf1"], ["#77503f", "#3b2d3a", "#f1c17e"], ["#2d5760", "#1c3449", "#b4f0da"], ["#1f5159", "#102d3d", "#93e0da"], ["#403453", "#191e35", "#c6a4e0"]],
+      [["#6a5b4e", "#303f3c", "#f3d08c"], ["#45425f", "#222c46", "#ddcaed"], ["#733c38", "#36263b", "#f8aa74"], ["#41637c", "#233b55", "#cbf3ff"], ["#373f69", "#1b294d", "#bfd0ff"], ["#51385d", "#251d3e", "#eac1ef"]]
+    ];
+    const motifs = [
+      [
+        '<path d="M0 208q90-85 225-18l-34 65-53 28-85-24ZM434 142q108-60 223-5l-40 61-79 25-74-30ZM927 212q120-98 273-16l-39 81-110 14-97-32Z" fill="#426b60"/><g fill="#9dc5a2"><path d="m114 176-33-45 39-60 46 67-32 43Zm435-43-27-39 30-68 38 72-27 36Zm503 65-32-53 46-64 35 67-24 45Z"/></g><path d="M202 204Q321 263 445 165m197-10q128 103 310 78" fill="none" stroke="#c2b58a" stroke-width="9"/><path d="m223 211v30m46-8v25m47-24v23m46-31v25m337-70v33m57-10v23m55-7v20m53-17v18" stroke="#827d68" stroke-width="4"/>',
+        '<path d="m168 203 77-38 84 44-34 58-96-4Zm680-55 93-38 101 49-47 62-112-5Zm-394 87 136-45 155 38-66 76-165-12Z" fill="#585572"/><g fill="#a4a0b4" stroke="#77758c" stroke-width="5"><path d="M205 192V121q39-62 77 0v74Zm698-54V70q40-60 78 0v78ZM516 217V126q74-96 143 0v91Z"/></g><g fill="#252b42"><path d="M226 181v-51q18-33 34 0v54Zm699-48V80q18-31 33 0v62ZM553 212v-73q39-59 69 0v74Z"/></g><path d="m244 257-31 87m750-129 24 128m-383-50-8 84" stroke="#aea4bf" stroke-width="3" stroke-dasharray="12 8"/>',
+        '<g fill="#aa946f" stroke="#5d5862" stroke-width="5"><path d="m185 292 19-161 48-89 39 93 17 161Zm315 17 21-201 81-89 72 93 17 191Zm405-18 20-159 46-77 39 81 18 157Z"/></g><g fill="#efca81" opacity=".65"><path d="m221 150 26-48 24 51-24 74ZM566 117l33-52 35 52-35 77ZM943 157l26-45 24 45-24 63Z"/></g><path d="M290 230h227m170 0h233" stroke="#c5aa77" stroke-width="9"/><circle cx="602" cy="43" r="65" fill="#e7ba63" opacity=".1"/>',
+        '<g fill="#91c2cd" opacity=".6"><path d="m119 297 56-139 54 138Zm256 21 93-238 118 235Zm381-13 67-184 76 186Zm230 13 51-126 61 126Z"/></g><path d="M0 198q107-69 238 0t236-3 241 8 252-8 233 4v68q-129 48-233 1t-252 4-241-9-236 3-238 1Z" fill="#a8d6e1" opacity=".3"/><path d="m435 111 33-31 49 38-44-9Zm350 40 38-30 29 42-26-10Z" fill="#e0eff0"/><path d="M388 320q207-39 414 0" fill="none" stroke="#c4e5e6" stroke-width="10"/>',
+        '<path d="M0 117q155-81 311-13t346-4 311 8 232-22v72H0Z" fill="#7384a9" opacity=".3"/><path d="m430 20-35 87 45-15-32 90 90-131-50 13 28-44m358 4-38 80 41-11-30 84 81-123-43 8 26-38" fill="#d6e6ff" opacity=".7"/><path d="m55 279 124-47 153 48-70 45-127-5Zm745-1 158-57 189 56-83 57-162-8Z" fill="#50676c"/><path d="M0 359q183-58 385-2t428-7 387-1" fill="none" stroke="#a8cfdb" stroke-width="13" opacity=".25"/>',
+        '<path d="M375 307V148q223-192 452 0v158" fill="#655b80" stroke="#bcadc5" stroke-width="18"/><path d="M426 302V164q177-128 349 0v138" fill="#303951"/><g fill="#a8a2be"><path d="m411 151-52-31 34-66 53 47Zm349-48 57-45 38 69-50 28Z"/></g><circle cx="601" cy="130" r="63" fill="none" stroke="#decaed" stroke-width="5"/><path d="m601 65 19 42 46 8-34 32 8 46-39-22-43 23 8-47-35-31 48-9Z" fill="#d1bfdc" opacity=".35"/><path d="M372 321h461m-410 17h358" stroke="#a2a0bf" stroke-width="12"/>'
+      ],
+      [
+        '<g fill="#415544"><path d="M89 327 104 84l49-33 51 33 16 243ZM951 327 965 75l53-28 43 35 22 245Z"/></g><path d="M274 308V157l61-19 30-73 47 78 65 19v146m262 0V144l62-19 29-66 43 70 66 20v160" fill="#6e7358" stroke="#a7a27e" stroke-width="6"/><path d="M481 303V165q111-77 238 0v138" fill="#263e33" stroke="#a7a27e" stroke-width="7"/><path d="m541 149-5-38 31 15 29-47 28 48 34-17-7 45" fill="#c6b483"/><g fill="#81916a"><circle cx="169" cy="84" r="74"/><circle cx="1017" cy="78" r="77"/></g>',
+        '<path d="M0 250h1200v85H0Z" fill="#645c69"/><g fill="#a69ba6" stroke="#554e60" stroke-width="4"><path d="M134 291V136l43-42 39 44v153Zm167 0V93l41-38 42 40v196Zm517 0V95l42-42 41 44v194Zm169 0V135l40-39 42 42v153Z"/><path d="M459 285V103l139-70 146 70v182Z"/></g><path d="M542 284V139q55-80 112 0v145" fill="#272a3b"/><path d="M490 106h221M122 300h967" stroke="#cdc0c6" stroke-width="7"/><circle cx="599" cy="97" r="15" fill="#c5b797"/>',
+        '<path d="M108 302V127h118V81h87v222m583-1V91h83v37h119v174M400 309V110h407v199" fill="#725447" stroke="#a48062" stroke-width="5"/><path d="M445 106V53h59v53m186 0V38h61v68" fill="#594644"/><path d="M493 295V177h54v118m85 0V155h74v140" fill="#e8a965" opacity=".4"/><g fill="none" stroke="#d9b884" stroke-width="6"><circle cx="601" cy="140" r="33"/><path d="M601 94v92m-46-46h92m-78-32 65 65m0-65-65 65"/></g><path d="M93 323h1013" stroke="#d79866" stroke-width="10"/>',
+        '<path d="M0 290 129 273 252 294 388 260 595 299 813 271 988 293 1200 267v133H0Z" fill="#496177"/><g fill="#87acc8" stroke="#b8dbed" stroke-width="3"><path d="m216 286-20-92 36-97 31 103-17 83Zm255-13-16-122 45-113 37 116-20 130Zm252 10-21-91 37-83 33 91-22 94Zm215-3-13-138 39-106 31 110-17 139Z"/></g><path d="M367 311h477" stroke="#a6c8dd" stroke-width="10"/><path d="m485 111 13 170m239-100 8 96m216-165 4 170" stroke="#d4ebf7" stroke-width="2"/>',
+        '<path d="M0 284h1200v116H0Z" fill="#34717a" opacity=".6"/><path d="M85 278V159l37-68 37 68v113m880-1v-96l36-60 39 60v100" fill="#9caa9c"/><path d="M238 279q145-164 354-88t372 91" fill="none" stroke="#c5ccb1" stroke-width="21"/><path d="M268 273q134-111 311-59t353 60" fill="none" stroke="#657f7d" stroke-width="10"/><path d="m290 277 12-40m111 22 4-43m309 18 4 43m113-31 12 34" stroke="#aebfa8" stroke-width="12"/><g fill="#e0d2ab"><path d="m454 92 42-33 37 38-40 30Zm261 22 33-30 32 33-31 26Z"/></g>',
+        '<circle cx="603" cy="164" r="129" fill="none" stroke="#a88cb9" stroke-width="9"/><ellipse cx="603" cy="164" rx="206" ry="59" fill="none" stroke="#c3a8d7" stroke-width="5" transform="rotate(-24 603 164)"/><path d="M472 267 426 326h357l-42-62" fill="#766284"/><circle cx="603" cy="164" r="49" fill="#e4c8ed" opacity=".3"/><g fill="#e1c9f0"><circle cx="486" cy="116" r="10"/><circle cx="752" cy="138" r="13"/><circle cx="594" cy="37" r="8"/></g><path d="M536 300h136m-168 18h201" stroke="#b8a3ca" stroke-width="8"/>'
+      ],
+      [
+        '<g fill="none" stroke="#64875e" stroke-width="26"><path d="M115 314V88h221v138h152V57h215v183h160V105h218v211"/><path d="M269 317v-41H168V153h99V94m278 224V104h104v177h112m269 33V165h-99v99h-78"/></g><path d="M460 316q135-92 276 0" fill="#304b38"/><g fill="#9abd77"><circle cx="116" cy="89" r="29"/><circle cx="334" cy="88" r="26"/><circle cx="701" cy="57" r="35"/><circle cx="1084" cy="105" r="28"/></g><path d="M522 308h150" stroke="#c1bb88" stroke-width="7"/>',
+        '<path d="M143 309V71h106v238m703 0V71h105v238M360 311V107q239-131 480 0v204" fill="#665879" stroke="#aa90bf" stroke-width="8"/><g fill="none" stroke="#c4a9e0" stroke-width="3" opacity=".55"><ellipse cx="603" cy="164" rx="145" ry="111"/><ellipse cx="603" cy="164" rx="108" ry="87"/><ellipse cx="603" cy="164" rx="72" ry="59"/></g><circle cx="603" cy="163" r="31" fill="#d8b9ee" opacity=".25"/><path d="M0 324h1200m-1042-94h88m714 0h84" stroke="#7d6a98" stroke-width="10"/>',
+        '<path d="M0 249q147-76 314-9t349-4 319 12 218-29v181H0Z" fill="#966d50"/><path d="M0 322q199-78 369-17t363 1 468-13v107H0Z" fill="#55403c"/><path d="M546 274V129l56-43 52 43v145Z" fill="#8e614a"/><path d="m601 126-30-41-55-10 26-36 36 22 23-54 23 54 38-24 25 39-55 8Z" fill="#e7ad67"/><path d="M114 248 134 161l15 9 6 76m882 4 13-89 18 5 8 83" fill="#dfb06b"/><circle cx="859" cy="74" r="41" fill="#e5c39e" opacity=".25"/>',
+        '<path d="M0 63q231 130 489 9t711 22M0 103q237 130 488 13t712 22" fill="none" stroke="#a3f0bd" stroke-width="18" opacity=".25"/><path d="M0 153q232-98 477 7t723-23" fill="none" stroke="#b7a5e7" stroke-width="29" opacity=".2"/><path d="M0 318 107 301 257 321 419 285 595 321 789 291 965 322 1200 282v118H0Z" fill="#7da8ad"/><g fill="#d4e8df"><path d="m273 315 56-74 67 69Zm379-7 50-79 63 76Zm-523 8 22-87 27 88Z"/></g><path d="M411 326q162-55 351 0" fill="none" stroke="#bde3dc" stroke-width="9"/>',
+        '<path d="M162 313q87-168 431-200 376-37 489 180" fill="none" stroke="#81b6b7" stroke-width="30" opacity=".65"/><g fill="none" stroke="#accdbe" stroke-width="12" opacity=".6"><path d="M262 296q-31-79 28-132m80 107q-38-113 27-132m96 129q-28-125 31-140m97 145q24-128-38-154m135 160q52-128-8-147m105 162q70-105 8-140"/></g><path d="M0 330q309-34 607 4t593-4v70H0Z" fill="#1e4c50"/><path d="m445 42 18 272m295-286-7 278" stroke="#a1e0d0" stroke-width="40" opacity=".06"/>',
+        '<circle cx="623" cy="111" r="75" fill="#ad8cbf" opacity=".35"/><circle cx="650" cy="91" r="74" fill="#24253e"/><path d="M0 298 188 188 305 305 514 244 716 299 897 171 1200 308v92H0Z" fill="#51435f"/><g fill="#897398"><path d="m101 312 32-102 19 115Zm258-16 35-133 22 139Zm493 16 24-141 32 153Zm250 18 30-151 22 157Z"/></g><path d="m505 291 32-68 56-25 63 27 34 71" fill="none" stroke="#c1a1d0" stroke-width="6"/>'
+      ],
+      [
+        '<circle cx="603" cy="142" r="105" fill="#ebc183" opacity=".22"/><path d="M0 303q224-63 400-21t357-20 443 36v102H0Z" fill="#668263"/><g fill="#acb88b"><path d="M130 316 144 123h26l18 193Zm842 0 19-206h27l18 206Z"/><circle cx="160" cy="126" r="72"/><circle cx="1006" cy="118" r="78"/></g><path d="M440 324 599 197 766 324" fill="#d5bc8b" opacity=".3"/><path d="m520 320 79-89 91 90" fill="#e4c797" opacity=".3"/>',
+        '<circle cx="602" cy="165" r="124" fill="#635c7c" stroke="#b1a1c7" stroke-width="10"/><circle cx="602" cy="165" r="100" fill="#28314b" stroke="#9484b0" stroke-width="3"/><g stroke="#d6c7dd" stroke-width="5"><path d="M602 68v20m0 154v20m-97-97h20m154 0h20m-166-69 14 14m110 110 14 14m-138 0 14-14m110-110 14-14M602 165V101m0 64 45 27"/></g><path d="M173 300 207 95h58l34 205m605 0 35-206h57l32 206" fill="#81758f"/><path d="m231 114 1 161m735-159-3 159" stroke="#baadc9" stroke-width="6"/>',
+        '<path d="M0 305 219 229 371 270 495 127 598 92 709 125 865 275 1018 218 1200 302v98H0Z" fill="#754b4b"/><path d="m495 127 54 38 49-28 54 29 57-41-53 2-56-35-54 34Z" fill="#ec9c68"/><path d="m598 154-17 117-45 62 87 55 31-58-34-64Z" fill="#e29460"/><path d="m573 72-20-55m80 52 35-47m-70 32 2-52" stroke="#dca176" stroke-width="8" opacity=".35"/><circle cx="597" cy="80" r="65" fill="#f6a062" opacity=".08"/>',
+        '<path d="M0 0h1200v63l-134 58-98-55-129 49-142-78-147 74-143-49-175 60L0 53Z" fill="#95bcca"/><path d="M0 400V217l128-99 175 54 116-81 186 62 140-74 167 87 133-65 155 140v159H0Z" fill="#426780"/><path d="M297 339V204q304-228 613 0v135" fill="#1c344e" stroke="#9ac7df" stroke-width="15"/><g fill="#b5deeb"><path d="m431 139 25 88 25-109Zm288-17 28 89 25-75Zm-145-29 32 89 23-88Z"/></g><path d="M0 365h1200" stroke="#c5e9f0" stroke-width="13" opacity=".5"/>',
+        '<path d="M0 250q226-89 439-13t397-9 364 8v164H0Z" fill="#506391" opacity=".65"/><path d="M0 324q249-65 468-3t393-13 339 11" fill="none" stroke="#b3c8ef" stroke-width="7"/><g fill="#cfdbf4"><circle cx="224" cy="79" r="19"/><circle cx="445" cy="124" r="11"/><circle cx="777" cy="76" r="27"/><circle cx="1004" cy="132" r="14"/></g><ellipse cx="777" cy="77" rx="55" ry="13" fill="none" stroke="#c5b2e4" stroke-width="5" transform="rotate(-20 777 77)"/><path d="m516 288 90-79 92 85-87 41Z" fill="#8c9cb6"/><path d="m546 287 61-51 54 57-51 22Z" fill="#c2d0e6"/>',
+        '<path d="M393 310 336 219 376 91 482 35l42 44-77 91 30 128m250 8 51-143-77-87 43-46 108 53 41 132-61 104" fill="#82608e" stroke="#b58dc1" stroke-width="7"/><path d="M545 303 498 173l106-97 100 95-39 133Z" fill="#452a57" stroke="#d5aadf" stroke-width="6"/><path d="m603 108-61 66 60 103 58-104Z" fill="#e0b6e9" opacity=".6"/><path d="m606 141-30 36 26 63 31-65Z" fill="#fff1ed" opacity=".5"/><path d="M0 342 394 309l155 23 115-1 152-24 384 32" fill="none" stroke="#c598d5" stroke-width="7"/>'
+      ]
+    ];
+    const [sky, ground, accent] = palettes[stage - 2][zone];
+    const stars = Array.from({ length: 26 }, (_, i) => `<circle class="spark" cx="${(i * 173 + stage * 43) % 1200}" cy="${(i * 61 + zone * 29) % 280}" r="${i % 4 ? 1.3 : 2.5}" fill="${accent}" opacity=".4" style="animation-delay:-${i % 5}s"/>`).join("");
+    return svgFrame(`<title>${stages[stage - 1].worlds[zone]}</title><rect width="1200" height="400" fill="url(#world-sky)"/>${stars}${motifs[stage - 2][zone]}<path d="M0 369q224-19 425 2t385-6 390 5v30H0Z" fill="${ground}" opacity=".8"/>`,
+      `<linearGradient id="world-sky" x2="0" y2="1"><stop stop-color="${sky}"/><stop offset="1" stop-color="${ground}"/></linearGradient>`, "0 0 1200 400").replace('<svg xmlns=', '<svg preserveAspectRatio="xMidYMid slice" xmlns=');
+  }
+
+  function sceneArtwork(zone, stage = 1) {
+    if (stage > 1) return worldArtwork(stage, zone);
     const sparks = Array.from({ length: 22 }, (_, i) => {
       const x = (i * 137 + 48) % 1200;
       const y = (i * 73 + 54) % 350;
@@ -877,7 +1080,7 @@
 
   function loadEncounter() {
     const definition = state.encounters[state.encounter];
-    state.party.forEach((member) => { member.shield = 0; member.dice = []; member.selected = null; member.rerolls = 1 + state.extraRerolls; member.usedAbilities.clear(); });
+    state.party.forEach((member) => { member.shield = definition.kind === "shop" ? 0 : (state.skills.barrier || 0) * 4; member.dice = []; member.selected = null; member.rerolls = 1 + state.extraRerolls; member.usedAbilities.clear(); });
     state.acted = [];
     state.actorIndex = livingMembers()[0]?.index ?? 0;
     state.enemyCursor = 0;
@@ -897,8 +1100,8 @@
     $("zone-title").textContent = worldName();
     $("area-label").textContent = `STAGE ${stageFor(state.encounter)} · WORLD ${zoneIndex + 1} / 6`;
     $("arena").className = `arena ${zone.className}`;
-    $("scene-art").innerHTML = sceneArtwork(zoneIndex);
-    $("scene-art").style.filter = `hue-rotate(${stages[stageFor(state.encounter) - 1].hue}deg)`;
+    $("scene-art").innerHTML = sceneArtwork(zoneIndex, stageFor(state.encounter));
+    $("scene-art").style.filter = "";
     $("flavor-text").textContent = definition.flavor;
     render();
   }
@@ -906,7 +1109,8 @@
   function enemyArtwork(enemy) {
     let artwork = enemy.type === "slime" ? slimeArtwork(enemy) : enemy.type === "skeleton" ? skeletonArtwork(enemy) : enemy.type === "demon" ? demonArtwork(enemy) : creatureArtwork(enemy);
     if (enemy.mushroom) artwork = artwork.replace("</svg>", '<path d="M56 105q13-83 69-75 49 3 64 74Z" fill="#af677f" stroke="#663f62" stroke-width="4"/><g fill="#edccbe"><ellipse cx="90" cy="75" rx="11" ry="7"/><ellipse cx="138" cy="53" rx="9" ry="6"/><ellipse cx="163" cy="88" rx="10" ry="7"/></g></svg>');
-    if (enemy.flying) artwork = artwork.replace("</svg>", '<g fill="#b8dcec" fill-opacity=".75" stroke="#537f9e" stroke-width="3"><path d="M91 120Q49 59 10 48q5 68 59 116l-15-39 29 21Z"/><path d="M152 120q42-61 81-72-5 68-59 116l15-39-29 21Z"/></g></svg>');
+    if (enemy.flying && !["bird", "moth", "dragon"].includes(enemy.type)) artwork = artwork.replace("</svg>", '<g fill="#b8dcec" fill-opacity=".75" stroke="#537f9e" stroke-width="3"><path d="M91 120Q49 59 10 48q5 68 59 116l-15-39 29 21Z"/><path d="M152 120q42-61 81-72-5 68-59 116l15-39-29 21Z"/></g></svg>');
+    if (enemy.homeStage === 3 && ["wolf", "skeleton", "golem"].includes(enemy.type)) artwork = artwork.replace("</svg>", '<circle cx="120" cy="145" r="18" fill="#283949" stroke="#e6c17e" stroke-width="4"/><path d="m120 131 9 14-9 14-9-14Z" fill="#d9cb99"/></svg>');
     return artwork;
   }
 
@@ -947,7 +1151,7 @@
       const intent = getIntent(enemy);
       const member = state.party[intent.target];
       const disabled = practice || !["ready", "rolled"].includes(state.phase) || !enemy.hp;
-      return `<button class="enemy-card${i === state.target ? " targeted" : ""}${!enemy.hp ? " fallen-enemy" : ""}" data-enemy="${i}" aria-pressed="${i === state.target}" aria-label="Target ${enemy.name}, ${enemy.hp} of ${enemy.maxHp} health${enemy.flying ? ", flying, bow required" : ""}${enemy.shield ? `, ${enemy.shield} shield` : ""}"${disabled ? " disabled" : ""}><span class="enemy-portrait" aria-hidden="true">${namespaceArtwork(enemyArtwork(enemy), `formation-${i}`)}</span><strong>${enemy.name.replace(/^Frenzied /, "")}</strong><small>${enemy.hp} / ${enemy.maxHp} HP${enemy.shield ? ` · ⬡ ${enemy.shield}` : ""}${enemy.flying ? " · FLYING" : ""}</small><span class="member-health enemy-health-track"><i style="width:${enemy.hp / enemy.maxHp * 100}%"></i></span><small>${!enemy.hp ? "DEFEATED" : enemy.frozen ? "FROZEN" : intent.kind === "guard" ? `⬡ ${intent.value} shield` : `⚔ ${Math.max(0, intent.value - enemy.chill)} → ${memberTypes[member.key].name}${enemy.chill ? " · ❄" : ""}`}${enemy.poison && enemy.hp ? ` · ❧ ${enemy.poison}` : ""}</small></button>`;
+      return `<button class="enemy-card${i === state.target ? " targeted" : ""}${!enemy.hp ? " fallen-enemy" : ""}" data-enemy="${i}" aria-pressed="${i === state.target}" aria-label="Target ${enemy.name}, ${enemy.hp} of ${enemy.maxHp} health${enemy.flying ? ", flying, bow required" : ""}${enemy.shield ? `, ${enemy.shield} shield` : ""}"${disabled ? " disabled" : ""}><span class="enemy-portrait" aria-hidden="true">${namespaceArtwork(enemyArtwork(enemy), `formation-${i}`)}</span><strong>${enemy.name.replace(/^Frenzied /, "")}</strong><small>${enemy.hp} / ${enemy.maxHp} HP${enemy.shield ? ` · ⬡ ${enemy.shield}` : ""}${enemy.flying ? " · FLYING" : ""}</small><span class="member-health enemy-health-track"><i style="width:${enemy.hp / enemy.maxHp * 100}%"></i></span><small>${!enemy.hp ? "DEFEATED" : enemy.frozen ? "FROZEN" : intent.kind === "guard" ? `⬡ ${intent.value} shield` : `⚔ ${incomingDamage(enemy, intent)} → ${memberTypes[member.key].name}${enemy.chill ? " · ❄" : ""}`}${enemy.poison && enemy.hp ? ` · ❧ ${enemy.poison}` : ""}</small></button>`;
     }).join("");
   }
 
@@ -975,11 +1179,14 @@
     const target = living.length ? living[(state.turn - 1 + state.enemies.indexOf(enemy)) % living.length].index : state.actorIndex;
     return { kind, value: kind === "guard" ? base : base + rage, name, rage, target };
   }
+  function incomingDamage(enemy, intent = getIntent(enemy)) {
+    return Math.max(0, intent.value - enemy.chill - (state.skills.resilience || 0));
+  }
 
   function totals() {
     const result = { attack: 0, guard: 0, mend: 0, criticals: 0, pierce: 0, poison: 0, gold: 0, chill: 0, chains: 0 };
     const omen = currentOmen();
-    const power = state.power + (omen.power || 0);
+    const power = state.power + (omen.power || 0) + (state.weapon === "bow" ? (state.skills.archery || 0) * 2 : 0);
     const ward = state.ward + (omen.ward || 0);
     const healing = state.healing + (omen.healing || 0);
     actor().dice.forEach((die) => {
@@ -990,7 +1197,7 @@
       } else if (die.type === "guard") result.guard += value + ward;
       else if (die.type === "mend") result.mend += value + healing;
       else if (die.type === "flame") result.pierce += value + 2 + power;
-      else if (die.type === "venom") result.poison += Math.ceil(value / 2);
+      else if (die.type === "venom") result.poison += Math.ceil(value / 2) + (state.skills.venomcraft || 0);
       else if (die.type === "blood") { result.attack += value + power; result.mend += Math.ceil(value / 2) + healing; }
       else if (die.type === "fortune") { result.gold += value; result.guard += Math.ceil(value / 2) + ward; }
       else if (die.type === "frost") { result.pierce += Math.ceil(value / 2) + power; result.chill += Math.ceil(value / 2); }
@@ -1000,6 +1207,8 @@
         if (strikes === 2) result.chains++;
       } else if (die.type === "bloom") { result.mend += Math.ceil(value / 2) + healing; result.guard += Math.floor(value / 2) + ward; }
     });
+    result.mend += Math.floor((result.attack + result.pierce) * (state.skills.siphon || 0) * .04);
+    result.gold = Math.floor(result.gold * (1 + (state.skills.harvest || 0) * .5));
     return result;
   }
 
@@ -1030,7 +1239,7 @@
     $("enemy-hp").innerHTML = `${enemy.hp} <small>/ ${enemy.maxHp}${enemy.shield ? ` · ⬡ ${enemy.shield}` : ""}</small>`;
     $("hero-health-fill").style.width = `${actor().hp / actor().maxHp * 100}%`;
     $("enemy-health-fill").style.width = `${enemy.hp / enemy.maxHp * 100}%`;
-    $("hero-power").textContent = `+${state.power} attack power`;
+    $("hero-power").textContent = `+${state.power + (state.weapon === "bow" ? (state.skills.archery || 0) * 2 : 0)} attack power`;
     $("hero-healing").textContent = `+${state.healing} healing`;
     $("hero-caption")?.setAttribute("title", `Attack +${state.power} per die. Guard +${state.ward} per die. Mend +${state.healing} per die. Critical bonus +${state.critBonus}.`);
     const stage = stageFor(state.encounter);
@@ -1057,7 +1266,7 @@
       return `${slot ? '<span class="route-line"></span>' : ""}<span class="route-node${round.boss ? " boss" : ""}${round.kind === "shop" ? " shop-node" : ""}${i < state.completed ? " done" : i === state.encounter ? " current" : ""}" data-round="${i + 1}" data-kind="${round.kind}" aria-label="Stage ${stage}, round ${localRound(i) + 1}: ${round.name}${i < state.completed ? ", completed" : i === state.encounter ? ", current" : ""}"${i === state.encounter ? ' aria-current="step"' : ""}><span>${i < state.completed ? "✓" : round.kind === "shop" ? "◈" : round.boss ? "♛" : localRound(i) + 1}</span></span>`;
     }).join("")}</span>`).join("");
     const intentIcon = intent.kind === "guard" ? "⬡" : intent.kind === "drain" ? "✦" : "⚔";
-    const intentSuffix = intent.kind === "guard" ? `gains <strong>${intent.value}</strong> shield` : `<strong>${Math.max(0, intent.value - enemy.chill)}</strong> damage${enemy.chill ? ` (❄ −${enemy.chill})` : ""}${intent.kind === "drain" ? " + lifesteal" : ""}`;
+    const intentSuffix = intent.kind === "guard" ? `gains <strong>${intent.value}</strong> shield` : `<strong>${incomingDamage(enemy, intent)}</strong> damage${enemy.chill ? ` (❄ −${enemy.chill})` : ""}${state.skills.resilience ? ` (✥ −${state.skills.resilience})` : ""}${intent.kind === "drain" ? " + lifesteal" : ""}`;
     $("intent").innerHTML = `<span class="intent-icon">${intentIcon}</span><span>${enemy.frozen ? "FROZEN · next action skipped" : `${intent.name} · ${intentSuffix}${intent.kind !== "guard" && enemy.hp ? ` → ${memberTypes[state.party[intent.target].key].name}` : ""}`}${enemy.poison ? ` · ❧ ${enemy.poison}` : ""}</span>`;
     const phase = state.phase;
     const badge = phase === "resolving" ? "BATTLE IN MOTION" : ["victory", "shop", "won"].includes(phase) ? "VICTORY" : phase === "lost" ? "EXPEDITION ENDED" : "YOUR TURN";
@@ -1081,7 +1290,7 @@
     $("reroll-button").innerHTML = `↻ Reroll selected <span>${actor().rerolls} left</span>`;
     $("dice-count").textContent = `${actor().collection.length} / ${MAX_DICE}`;
     $("dice-caption").textContent = phase === "rolled" ? "SELECT A DIE TO REROLL, OR MAKE YOUR MOVE" : phase === "rolling" ? "FATE IS DECIDING…" : "BUILD YOUR COLLECTION AT THE NEXT SHOP";
-    $("die-description").textContent = actor().selected !== null ? dieDescription(actor().dice[actor().selected]) : "Six materials, ten effects. Find rare dice and sell old ones at the shop.";
+    $("die-description").textContent = actor().selected !== null ? dieDescription(actor().dice[actor().selected]) : "Ten materials, ten effects. New materials and upgrades unlock every stage.";
     $("phase-title").textContent = phase === "ready" ? "Make your own luck." : phase === "rolled" ? "Your collection. Your destiny." : phase === "rolling" ? "Let fortune fall." : phase === "resolving" ? "Your fate unfolds." : phase === "lost" ? "The dice will roll again." : "Fortune favors the brave.";
     $("phase-instruction").textContent = phase === "rolled" ? "Choose a target, reroll, cast an ability, or make your move." : phase === "ready" ? `Roll ${actor().collection.length === 1 ? "your die" : `your ${actor().collection.length} dice`}. Surviving enemies strike after your move.` : phase === "rolling" ? "A little courage. A little luck." : phase === "resolving" ? "Your shields protect you. Enemy turns resolve automatically." : "An expedition is only the beginning.";
     const outgoing = canHitTarget() ? Math.max(0, values.attack - enemy.shield) + values.pierce : 0;
@@ -1242,7 +1451,7 @@
       await wait(650);
       if (state.id !== run) return;
     }
-    if (values.poison && enemy.hp) enemy.poison = Math.min(12, enemy.poison + values.poison);
+    if (values.poison && enemy.hp) enemy.poison = Math.min(poisonLimit(), enemy.poison + values.poison);
     enemy.chill += values.chill;
     member.dice = [];
     member.selected = null;
@@ -1291,7 +1500,7 @@
         if (state.id !== run) return;
         if (!enemy.hp) { await victory(i, "enemies"); return; }
       }
-      const weakened = Math.max(0, intent.value - enemy.chill);
+      const weakened = incomingDamage(enemy, intent);
       enemy.chill = 0;
       if (enemy.frozen) {
         enemy.frozen = false;
@@ -1352,15 +1561,17 @@
     const enemy = state.enemies[index];
     if (state.phase !== "resolving" || enemy.hp > 0 || enemy.rewarded) return;
     const run = state.id;
-    enemy.rewarded = true;
-    state.defeated++;
     const omen = currentOmen();
-    const gold = Math.ceil(enemy.gold * (1 + state.lootBonus)) + (omen.gold || 0);
-    const recovery = Math.min(actor().maxHp - actor().hp, 8 + state.recovery + (omen.recovery || 0));
-    actor().hp += recovery;
-    state.battleLoot.gold += gold;
-    state.battleLoot.recovery += recovery;
-    log(`${enemy.name} falls. ${gold} gold goes into the round's chest${recovery ? `; recover ${recovery} health` : ""}.`);
+    state.enemies.filter((foe) => !foe.hp && !foe.rewarded).forEach((foe) => {
+      foe.rewarded = true;
+      state.defeated++;
+      const gold = Math.ceil(foe.gold * (1 + state.lootBonus)) + (omen.gold || 0);
+      const recovery = Math.min(actor().maxHp - actor().hp, 8 + state.recovery + (omen.recovery || 0));
+      actor().hp += recovery;
+      state.battleLoot.gold += gold;
+      state.battleLoot.recovery += recovery;
+      log(`${foe.name} falls. ${gold} gold goes into the round's chest${recovery ? `; recover ${recovery} health` : ""}.`);
+    });
     if (!battleWon()) {
       state.target = state.enemies.findIndex((foe) => foe.hp > 0);
       if (resume.startsWith("ability-")) {
@@ -1430,13 +1641,17 @@
 
   function makeStock() {
     state.expandedOffers.clear();
+    const stage = stageFor(state.encounter);
+    const availableAbilities = shuffle(Object.keys(abilities).filter((key) => unlocked(abilities[key]) && !actor().abilities.includes(key)));
+    const availableSkills = shuffle(Object.keys(skills).filter((key) => (state.skills[key] || 0) < skillLimit(key)));
+    const newestFirst = (list, catalog) => [...list.filter((key) => catalog[key].unlock === stage), ...list.filter((key) => catalog[key].unlock !== stage)];
     const types = ["attack", "guard", "mend"];
     const newType = shuffle(["frost", "lightning", "bloom"])[0];
     types.push(newType, shuffle(Object.keys(diceTypes).filter((key) => !types.includes(key) && key !== newType))[0]);
     const offers = [
       ...types.map((key) => ({ kind: "dice", key })),
-      ...shuffle(Object.keys(abilities).filter((key) => state.party.some((member) => !member.abilities.includes(key)))).slice(0, 2).map((key) => ({ kind: "ability", key })),
-      ...shuffle(Object.keys(skills).filter((key) => (state.skills[key] || 0) < skills[key].max)).slice(0, 3).map((key) => ({ kind: "skill", key }))
+      ...newestFirst(availableAbilities, abilities).slice(0, 2).map((key) => ({ kind: "ability", key })),
+      ...newestFirst(availableSkills, skills).slice(0, 3).map((key) => ({ kind: "skill", key }))
     ];
     state.stock = offers.map((offer) => {
       const item = itemDefinition(offer);
@@ -1449,9 +1664,9 @@
   }
 
   function offerUnavailable(offer) {
-    return (offer.kind === "skill" && offer.bought) || (offer.kind === "dice" && actor().collection.length >= MAX_DICE) ||
+    return !unlocked(itemDefinition(offer)) || (offer.kind === "skill" && offer.bought) || (offer.kind === "dice" && actor().collection.length >= MAX_DICE) ||
       (offer.kind === "ability" && actor().abilities.includes(offer.key)) ||
-      (offer.kind === "skill" && (state.skills[offer.key] || 0) >= skills[offer.key].max);
+      (offer.kind === "skill" && (state.skills[offer.key] || 0) >= skillLimit(offer.key));
   }
 
   function offerPrice(offer, tier = "base") {
@@ -1475,7 +1690,8 @@
 
   function renderShopHeading() {
     $("shop-eyebrow").textContent = `STAGE ${stageFor(state.encounter)} / ${STAGE_COUNT} · ROUND ${localRound(state.encounter) + 1} / ${STAGE_LENGTH} · SHOP ONLY`;
-    $("shop-description").textContent = `A safe haven in ${worldName()}. No monster this round: spend gold, upgrade dice, or open Sell my dice to trade old ones. Prepare for ${localRound(state.encounter) === STAGE_LENGTH - 2 ? "the stage guardian" : "the next world"}.`;
+    const stage = stageFor(state.encounter);
+    $("shop-description").textContent = `A safe haven in ${worldName()}. Core upgrades now reach level ${stage * 3}. ${stage >= 2 ? `${["", "", "Sapphire", "Sunstone", "Mythril", "Celestial"][stage]} dice and new stage abilities are available. ` : "More upgrades, abilities, and materials unlock in later stages. "}Sell old dice to make room; your purchases carry forward.`;
   }
 
   function renderShop() {
@@ -1492,31 +1708,32 @@
         const unavailable = offerUnavailable(offer);
         if (offer.kind === "dice") {
           const owned = actor().collection.filter((die) => die.type === offer.key).length;
-          const variants = Object.entries(diceTiers).map(([key, tier]) => {
+          const variants = Object.entries(diceTiers).filter(([, tier]) => unlocked(tier)).map(([key, tier]) => {
             const price = offerPrice(offer, key);
             const count = actor().collection.filter((die) => die.type === offer.key && die.tier === key).length;
             const disabled = unavailable || state.gold < price;
             return `<button class="variant-buy variant-${key}" data-offer="${index}" data-tier="${key}" aria-label="Buy ${tier.name} ${item.name} for ${price} gold. Owned ${count}.${unavailable ? " Collection full." : state.gold < price ? " Not enough gold." : ""}"${disabled ? " disabled" : ""}><span class="variant-icon" aria-hidden="true">${tier.icon}</span><span class="variant-copy"><strong>${tier.name}</strong><small>${tier.bonus ? `+${tier.bonus} power` : "Standard power"} · Owned ${count}</small></span><span class="variant-price">${unavailable ? "FULL" : `◈ ${price}`}</span></button>`;
           });
-          const rare = `<details class="rare-materials" data-rare-offer="${index}"${state.expandedOffers.has(index) ? " open" : ""}><summary>Rare materials <small>Ruby · Emerald · Obsidian</small></summary><div class="variant-options">${variants.slice(3).join("")}</div></details>`;
+          const rare = `<details class="rare-materials" data-rare-offer="${index}"${state.expandedOffers.has(index) ? " open" : ""}><summary>Rare materials <small>${Object.values(diceTiers).filter((tier, i) => i >= 3 && unlocked(tier)).map((tier) => tier.name).join(" · ")}</small></summary><div class="variant-options">${variants.slice(3).join("")}</div></details>`;
           return `<div class="shop-card dice-shop-card type-${offer.key}"><span class="shop-card-icon">${item.icon}</span><span class="shop-card-kind">SPECIALIZED DIE · OWNED ${owned}</span><h3>${item.name}</h3><p>${item.text}</p><div class="variant-options">${variants.slice(0, 3).join("")}</div>${rare}<span class="repeat-purchase-note">BUY MULTIPLE · EACH COPY ROLLS SEPARATELY</span></div>`;
         }
         const owned = offer.kind === "skill" ? state.skills[offer.key] || 0 : actor().abilities.includes(offer.key) ? 1 : 0;
         const purchased = offer.kind === "skill" && offer.bought;
         const status = purchased ? "PURCHASED" : unavailable ? "MAXED / OWNED" : state.gold < offer.price ? "NEED MORE GOLD" : `BUY · ◈ ${offer.price}`;
-        return `<button class="shop-card${purchased ? " purchased" : ""}" data-offer="${index}"${unavailable || state.gold < offer.price ? " disabled" : ""}><span class="shop-card-icon">${item.icon}</span><span class="shop-card-kind">${offer.kind === "ability" ? "ONCE / BATTLE" : "PERMANENT SKILL"}${owned ? ` · OWNED ${owned}` : ""}</span><h3>${item.name}</h3><p>${item.text}</p><span class="shop-price">${status}${!unavailable && state.gold < offer.price ? ` · ◈ ${offer.price}` : ""}</span></button>`;
-      }).join("") : '<p class="empty-stock">You already know all the abilities on offer. Browse dice or skills.</p>';
+        return `<button class="shop-card${purchased ? " purchased" : ""}" data-offer="${index}"${unavailable || state.gold < offer.price ? " disabled" : ""}><span class="shop-card-icon">${item.icon}</span><span class="shop-card-kind">${offer.kind === "ability" ? "ONCE / BATTLE" : `PERMANENT UPGRADE · LEVEL ${owned} / ${skillLimit(offer.key)}`}${item.unlock ? ` · STAGE ${item.unlock}+` : ""}</span><h3>${item.name}</h3><p>${item.text}</p><span class="shop-price">${status}${!unavailable && state.gold < offer.price ? ` · ◈ ${offer.price}` : ""}</span></button>`;
+      }).join("") : '<p class="empty-stock">No unowned wares in this category today. Refresh stock or browse another tab. New abilities and higher upgrade limits unlock in the next stage.</p>';
     }
     $("refresh-shop").disabled = state.refreshed || state.gold < 5;
     $("refresh-shop").textContent = state.refreshed ? "↻ Stock refreshed" : "↻ New stock · 5 gold";
     $("shop-rest").disabled = state.gold < 8 || actor().hp === actor().maxHp;
+    $("shop-rest").textContent = `✚ Restore ${12 + (state.skills.hospitality || 0) * 4} HP · 8 gold`;
     saveProgress();
   }
 
   function buyOffer(index, tier = "base") {
     const offer = state.stock[index];
     if (state.phase !== "shop" || !offer) return;
-    if (offer.kind === "dice" && !Object.hasOwn(diceTiers, tier)) {
+    if (offer.kind === "dice" && (!Object.hasOwn(diceTiers, tier) || !unlocked(diceTiers[tier]))) {
       notify("That dice variant is not available.");
       return;
     }
@@ -1535,7 +1752,7 @@
     else {
       offer.bought = true;
       state.skills[offer.key] = (state.skills[offer.key] || 0) + 1;
-      skills[offer.key].apply();
+      skills[offer.key].apply?.();
     }
     log(`${offer.kind === "dice" ? dieName({ type: offer.key, tier }) : itemDefinition(offer).name} purchased for ${price} gold.`);
     playSound("heal");
@@ -1621,49 +1838,82 @@
     $("main-button").focus({ preventScroll: true });
   }
 
+  function abilityBlockReason(key) {
+    const item = abilities[key];
+    if (item.bow && state.weapon !== "bow") return "Switch to Bow to use this ability.";
+    if ((item.rolled || item.effect === "reroll") && state.phase !== "rolled") return "Roll your dice first.";
+    if (["damage", "poison"].includes(item.effect) && targetEnemy().flying && !item.bow) return "Only bow attacks can damage this flying enemy.";
+    if (["heal", "fullheal"].includes(item.effect) && actor().hp === actor().maxHp) return "Your health is already full.";
+    return "";
+  }
+
   function renderAbilities() {
     $("ability-bar").innerHTML = actor().abilities.length ? actor().abilities.map((key) => {
       const used = actor().usedAbilities.has(key);
-      const ally = healingTarget();
-      const unreachable = key === "fireball" && targetEnemy().flying;
-      const disabled = used || unreachable || !["ready", "rolled"].includes(state.phase) || (key === "salve" && ally.hp === ally.maxHp);
-      return `<button class="ability-button" data-ability="${key}" title="${unreachable ? "Flying enemies can only be damaged by bow attacks." : abilities[key].text}"${disabled ? " disabled" : ""}><span>${abilities[key].icon}</span><strong>${abilities[key].name}</strong><small>${used ? "USED" : unreachable ? "BOW ONLY" : key === "salve" && ally.hp === ally.maxHp ? "FULL HP" : "READY"}</small></button>`;
+      const reason = abilityBlockReason(key);
+      const disabled = used || reason || !["ready", "rolled"].includes(state.phase);
+      return `<button class="ability-button" data-ability="${key}" title="${reason || abilities[key].text}"${disabled ? " disabled" : ""}><span>${abilities[key].icon}</span><strong>${abilities[key].name}</strong><small>${used ? "USED" : reason ? abilities[key].bow && state.weapon !== "bow" ? "BOW ONLY" : (abilities[key].rolled || abilities[key].effect === "reroll") && state.phase !== "rolled" ? "ROLL FIRST" : "UNAVAILABLE" : "READY"}</small></button>`;
     }).join("") : '<p class="empty-abilities">Buy abilities in shop-only rounds: 5, 10, 15, 20, 25, and 30. Each refreshes every battle.</p>';
   }
 
   async function castAbility(key) {
     if (practice || !actor().abilities.includes(key) || actor().usedAbilities.has(key) || !["ready", "rolled"].includes(state.phase)) return;
-    if (key === "fireball" && targetEnemy().flying) { notify("Only bow attacks can damage this flying enemy."); return; }
-    const ally = healingTarget();
-    if (key === "salve" && ally.hp === ally.maxHp) return;
+    const reason = abilityBlockReason(key);
+    if (reason) { notify(reason); return; }
+    const item = abilities[key];
+    const member = actor();
+    const enemies = item.all ? state.enemies.filter((enemy) => enemy.hp) : [targetEnemy()];
+    const rolledPower = member.dice.filter((die) => diceTypes[die.type].offensive).reduce((sum, die) => sum + die.value + diceTiers[die.tier].bonus, 0);
     const run = state.id;
     const previousPhase = state.phase;
     actor().usedAbilities.add(key);
     state.phase = "resolving";
-    if (key === "fireball") {
-      const damage = Math.min(10, targetEnemy().hp);
-      targetEnemy().hp -= damage;
-      state.stats.damage += damage;
-      floatNumber("enemy", `−${damage}`, "critical", "EMBER BOLT");
-      animate("enemy-art", "hit");
-      playSound("hit");
-      log(`Ember Bolt deals ${damage} damage through shields.`);
-    } else if (key === "salve") {
-      const healing = Math.min(14, ally.maxHp - ally.hp);
-      ally.hp += healing;
-      floatNumber("hero", `+${healing}`, "heal");
-      playSound("heal");
-      log(`Healing Spring restores ${healing} health to ${memberTypes[ally.key].name}.`);
-    } else {
-      targetEnemy().frozen = true;
-      floatNumber("enemy", "FROZEN", "block");
-      playSound("block");
-      log("Frost Seal freezes the enemy's next action.");
+    if (item.effect === "damage") {
+      const power = item.rolled ? Math.ceil(rolledPower * item.multiplier) : item.amount;
+      enemies.forEach((enemy) => {
+        const damage = Math.min(power, enemy.hp);
+        enemy.hp -= damage;
+        state.stats.damage += damage;
+        log(`${item.name} deals ${damage} piercing damage to ${enemy.name}.`);
+        if (enemy === targetEnemy()) floatNumber("enemy", `−${damage}`, "critical", item.name.toUpperCase());
+      });
+      animate("hero-art", "strike"); animate("enemy-art", "hit"); playSound("hit");
+    } else if (["heal", "fullheal", "sanctuary"].includes(item.effect)) {
+      const power = item.effect === "fullheal" ? member.maxHp : item.effect === "sanctuary" ? 20 + state.healing : item.amount + (item.unlock ? state.healing * 2 : 0);
+      const healing = Math.min(power, member.maxHp - member.hp);
+      member.hp += healing;
+      if (item.effect === "sanctuary") member.shield += 20 + state.ward;
+      floatNumber("hero", `+${healing}`, "heal"); playSound("heal");
+      log(`${item.name} restores ${healing} health${item.effect === "sanctuary" ? ` and adds ${20 + state.ward} shield` : ""}.`);
+    } else if (item.effect === "shield") {
+      const shield = item.amount + state.ward * 2;
+      member.shield += shield;
+      floatNumber("hero", `+${shield}`, "block", "SHIELD"); playSound("block");
+      log(`${item.name} adds ${shield} shield; ${member.shield} is stored.`);
+    } else if (item.effect === "freeze") {
+      enemies.forEach((enemy) => { enemy.frozen = true; });
+      floatNumber("enemy", "FROZEN", "block"); playSound("block");
+      log(`${item.name} freezes ${enemies.length} ${enemies.length === 1 ? "enemy" : "enemies"} for their next action.`);
+    } else if (item.effect === "poison") {
+      const poison = Math.ceil(rolledPower / 4);
+      targetEnemy().poison = Math.min(poisonLimit(), targetEnemy().poison + poison);
+      floatNumber("enemy", `+${poison}`, "heal", "POISON"); playSound("hit");
+      log(`${item.name} adds up to ${poison} poison; ${targetEnemy().poison} is stored.`);
+    } else if (item.effect === "shatter") {
+      const shield = targetEnemy().shield;
+      targetEnemy().shield = 0;
+      floatNumber("enemy", `−${shield}`, "critical", "ARMOR"); playSound("hit");
+      log(`${item.name} destroys ${shield} enemy shield.`);
+    } else if (item.effect === "reroll") {
+      member.rerolls = Math.min(member.rerolls + 2, 3 + state.extraRerolls);
+      floatNumber("hero", "+2", "block", "REROLLS"); playSound("roll");
+      log(`${item.name} grants two extra rerolls for this turn.`);
     }
     render();
     await wait(600);
     if (state.id !== run) return;
-    if (targetEnemy().hp <= 0) { await victory(state.target, `ability-${previousPhase}`); return; }
+    const defeated = state.enemies.findIndex((enemy) => !enemy.hp && !enemy.rewarded);
+    if (defeated >= 0) { await victory(defeated, `ability-${previousPhase}`); return; }
     state.phase = previousPhase;
     render();
     if ($("help-overlay").hidden) $("main-button").focus({ preventScroll: true });
@@ -1904,7 +2154,7 @@
   });
   $("shop-rest").addEventListener("click", () => {
     if (state.phase !== "shop" || state.gold < 8 || actor().hp === actor().maxHp) return;
-    const healing = Math.min(12, actor().maxHp - actor().hp);
+    const healing = Math.min(12 + (state.skills.hospitality || 0) * 4, actor().maxHp - actor().hp);
     state.gold -= 8;
     actor().hp += healing;
     render();

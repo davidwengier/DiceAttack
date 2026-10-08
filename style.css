@@ -229,6 +229,14 @@ footer { display: flex; justify-content: space-between; gap: 10px; padding: 22px
 .die.tier-emerald { --die-light: #b7f7d5; --die-dark: #328869; --die-edge: #226553; background: linear-gradient(125deg, #dbffdf, #85dbaf 37%, #b1efd0 38%, #6ecb9c 62%, #3b9f80 63%, #28765c); border-color: #b2f8d7; }
 .die.tier-obsidian { --die-light: #bd9bea; --die-dark: #433264; --die-edge: #30233f; background: linear-gradient(125deg, #9c7fc1, #47345e 37%, #685383 38%, #392942 62%, #604677 63%, #2a2036); border-color: #ac88d4; }
 .die.tier-obsidian .pip, .die.tier-obsidian[data-value="6"] .pip { background: #f0dfff; box-shadow: 0 0 5px #d9b1ff35; }
+.die.tier-sapphire { --die-dark: #487bcd; --die-edge: #28528b; background: linear-gradient(125deg, #d9eeff, #69a3ef 37%, #aed7ff 38%, #4e86d7 65%, #2d5494); border-color: #9dd6ff; }
+.die.tier-sunstone { --die-dark: #cc7b3f; --die-edge: #93612e; background: linear-gradient(125deg, #fff4c5, #efaf55 37%, #ffe4a1 38%, #d9863f 65%, #a9582f); border-color: #ffe1a1; }
+.die.tier-mythril { --die-dark: #558c95; --die-edge: #3d657b; background: linear-gradient(125deg, #ecffff, #9fc5d7 37%, #dafaf1 38%, #73a8b1 65%, #476e8c); border-color: #d0ffff; }
+.die.tier-celestial { --die-dark: #9378b3; --die-edge: #625385; background: linear-gradient(125deg, #fff1db, #c5ade9 25%, #b9e6ed 40%, #edc7e0 60%, #a999d8 85%, #8076b2); border-color: #f9e8ff; box-shadow: 0 0 22px #c6b1ee35; }
+.tier-sapphire .die-tier-mark { color: #b9dfff; background-color: #29466c; border-color: #77b6ee; }
+.tier-sunstone .die-tier-mark { color: #ffe3a3; background-color: #654522; border-color: #eac082; }
+.tier-mythril .die-tier-mark { color: #d1fbf8; background-color: #2d525e; border-color: #a9d6df; }
+.tier-celestial .die-tier-mark { color: #f0daff; background-color: #504367; border-color: #cdb1ed; }
 .die:not(.tier-base)::before { content: ""; position: absolute; inset: 0; border-radius: inherit; background: linear-gradient(120deg, transparent 40%, #ffffff50 41%, #ffffff15 56%, transparent 57%); pointer-events: none; }
 .die-tier-mark { position: absolute; top: -9px; right: -9px; width: 27px; height: 30px; display: flex; flex-direction: column; align-items: center; justify-content: center; background: #49371e; border: 1px solid #e8c668; border-radius: 6px; font-size: 12px; color: #ffe39a; box-shadow: 0 2px 8px #0005; z-index: 3; }
 .die-tier-mark small { font-size: 7px; line-height: 1; margin-top: 1px; font-weight: 700; }
@@ -293,6 +301,14 @@ footer { display: flex; justify-content: space-between; gap: 10px; padding: 22px
 .variant-emerald:hover:not(:disabled) { border-color: #a0e2bf; background: #65ba921b; }
 .variant-obsidian { color: #d5b5f5; border-color: #a080c950; background: #a080c90b; }
 .variant-obsidian:hover:not(:disabled) { border-color: #d5b5f5; background: #a080c91b; }
+.variant-sapphire { color: #b9dfff; border-color: #77b6ee70; background: #77b6ee0b; }
+.variant-sapphire:hover:not(:disabled) { border-color: #b9dfff; background: #77b6ee1b; }
+.variant-sunstone { color: #ffe3a3; border-color: #eac08270; background: #eac0820b; }
+.variant-sunstone:hover:not(:disabled) { border-color: #ffe3a3; background: #eac0821b; }
+.variant-mythril { color: #d1fbf8; border-color: #a9d6df70; background: #a9d6df0b; }
+.variant-mythril:hover:not(:disabled) { border-color: #d1fbf8; background: #a9d6df1b; }
+.variant-celestial { color: #f0daff; border-color: #cdb1ed70; background: #cdb1ed0b; }
+.variant-celestial:hover:not(:disabled) { border-color: #f0daff; background: #cdb1ed1b; }
 .variant-icon { font-size: 15px; }
 .variant-copy { flex: 1; min-width: 0; }
 .variant-copy strong { display: block; font-size: 10px; font-weight: 600; }
